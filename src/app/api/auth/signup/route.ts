@@ -96,8 +96,18 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error('Signup error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    console.error('Error details:', errorMessage);
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      },
+      { status: 500 }
+    );
+  }
+}
       { status: 500 }
     );
   }
