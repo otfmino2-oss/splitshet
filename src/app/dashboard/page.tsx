@@ -19,17 +19,31 @@ export default function Dashboard() {
   const [sourceData, setSourceData] = useState<{ source: string; count: number }[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '', contact: '', source: '', status: LeadStatus.NEW, priority: Priority.MEDIUM,
     followUpDate: '', lastMessage: '', notes: '', revenue: 0,
   });
 
-  const loadData = () => {
-    setLeads(getAllLeads());
-    setFinancial(getFinancialSummary());
-    setTodayFollowUps(getTodayFollowUps());
-    setSourceData(getSourceAnalytics());
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [leadsData, financialData, followUpsData, sourceDataResult] = await Promise.all([
+        getAllLeads(),
+        getFinancialSummary(),
+        getTodayFollowUps(),
+        getSourceAnalytics(),
+      ]);
+      setLeads(leadsData);
+      setFinancial(financialData);
+      setTodayFollowUps(followUpsData);
+      setSourceData(sourceDataResult);
+    } catch (error) {
+      console.error('Failed to load data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -71,24 +85,53 @@ export default function Dashboard() {
     setFormData({ name: '', contact: '', source: '', status: LeadStatus.NEW, priority: Priority.MEDIUM, followUpDate: '', lastMessage: '', notes: '', revenue: 0 });
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!formData.name || !formData.contact) return;
-    createLead({ ...formData, templatesUsed: [] });
-    loadData();
-    resetForm();
-    setShowAddModal(false);
+
+    try {
+      setLoading(true);
+      await createLead({ ...formData, templatesUsed: [] });
+      await loadData();
+      resetForm();
+      setShowAddModal(false);
+    } catch (error) {
+      console.error('Failed to create lead:', error);
+      alert('Failed to create lead. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!editingLead || !formData.name || !formData.contact) return;
-    updateLead(editingLead.id, formData);
-    loadData();
-    setEditingLead(null);
-    resetForm();
+
+    try {
+      setLoading(true);
+      await updateLead(editingLead.id, formData);
+      await loadData();
+      setEditingLead(null);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to update lead:', error);
+      alert('Failed to update lead. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Delete this lead?')) { deleteLead(id); loadData(); }
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this lead?')) return;
+
+    try {
+      setLoading(true);
+      await deleteLead(id);
+      await loadData();
+    } catch (error) {
+      console.error('Failed to delete lead:', error);
+      alert('Failed to delete lead. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const openEdit = (lead: Lead) => {

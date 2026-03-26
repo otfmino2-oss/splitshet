@@ -1,5 +1,49 @@
 import { Lead, Expense, Template, LeadStatus, Priority, ExpenseType, Activity, ActivityType, Task, TaskStatus, SourceAnalytics, ForecastData } from '@/types';
 
+// ========================
+// API BASE URL
+// ========================
+
+const API_BASE = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:3000';
+
+// ========================
+// AUTHENTICATION HELPERS
+// ========================
+
+const getAuthToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const token = localStorage.getItem('accessToken');
+    return token;
+  } catch {
+    return null;
+  }
+};
+
+const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
+  const token = getAuthToken();
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
+  };
+
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers: { ...headers, ...options.headers },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Network error' }));
+    throw new Error(error.error || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+};
+
+// ========================
+// LEGACY LOCAL STORAGE (for backward compatibility)
+// ========================
+
 const STORAGE_KEYS = {
   USERS: 'vault_users',
   AUTH: 'vault_auth',
@@ -70,7 +114,69 @@ const initializeUserData = () => {
 // LEADS OPERATIONS
 // ========================
 
-export const getAllLeads = (): Lead[] => {
+export const getAllLeads = async (): Promise<Lead[]> => {
+  try {
+    return await apiRequest('/api/leads');
+  } catch (error) {
+    console.error('Failed to fetch leads:', error);
+    // Fallback to localStorage for offline functionality
+    return getAllLeadsLocal();
+  }
+};
+
+export const getLeadById = async (id: string): Promise<Lead | undefined> => {
+  try {
+    const leads = await getAllLeads();
+    return leads.find(lead => lead.id === id);
+  } catch (error) {
+    console.error('Failed to fetch lead:', error);
+    return undefined;
+  }
+};
+
+export const createLead = async (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): Promise<Lead> => {
+  try {
+    const newLead = await apiRequest('/api/leads', {
+      method: 'POST',
+      body: JSON.stringify(lead),
+    });
+    return newLead;
+  } catch (error) {
+    console.error('Failed to create lead:', error);
+    // Fallback to localStorage
+    return createLeadLocal(lead);
+  }
+};
+
+export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Lead | null> => {
+  try {
+    const updatedLead = await apiRequest(`/api/leads/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+    return updatedLead;
+  } catch (error) {
+    console.error('Failed to update lead:', error);
+    // Fallback to localStorage
+    return updateLeadLocal(id, updates);
+  }
+};
+
+export const deleteLead = async (id: string): Promise<boolean> => {
+  try {
+    await apiRequest(`/api/leads/${id}`, {
+      method: 'DELETE',
+    });
+    return true;
+  } catch (error) {
+    console.error('Failed to delete lead:', error);
+    // Fallback to localStorage
+    return deleteLeadLocal(id);
+  }
+};
+
+// Legacy localStorage functions for fallback
+const getAllLeadsLocal = (): Lead[] => {
   if (typeof window === 'undefined') return [];
   try {
     initializeUserData();
@@ -81,12 +187,8 @@ export const getAllLeads = (): Lead[] => {
   }
 };
 
-export const getLeadById = (id: string): Lead | undefined => {
-  return getAllLeads().find((lead) => lead.id === id);
-};
-
-export const createLead = (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): Lead => {
-  const leads = getAllLeads();
+const createLeadLocal = (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): Lead => {
+  const leads = getAllLeadsLocal();
   const newLead: Lead = {
     ...lead,
     id: `lead_${Date.now()}`,
@@ -97,6 +199,25 @@ export const createLead = (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): 
   safeStorage.setItem(getUserStorageKey('leads'), JSON.stringify(leads));
   addActivity(newLead.id, ActivityType.NOTE, 'Lead created');
   return newLead;
+};
+
+const updateLeadLocal = (id: string, updates: Partial<Lead>): Lead | null => {
+  const leads = getAllLeadsLocal();
+  const index = leads.findIndex(lead => lead.id === id);
+  if (index === -1) return null;
+
+  leads[index] = { ...leads[index], ...updates, updatedAt: new Date().toISOString() };
+  safeStorage.setItem(getUserStorageKey('leads'), JSON.stringify(leads));
+  return leads[index];
+};
+
+const deleteLeadLocal = (id: string): boolean => {
+  const leads = getAllLeadsLocal();
+  const filteredLeads = leads.filter(lead => lead.id !== id);
+  if (filteredLeads.length === leads.length) return false;
+
+  safeStorage.setItem(getUserStorageKey('leads'), JSON.stringify(filteredLeads));
+  return true;
 };
 
 export const updateLead = (id: string, updates: Partial<Lead>): Lead | null => {
@@ -132,25 +253,85 @@ export const getLeadsByPriority = (priority: Priority): Lead[] => {
   return getAllLeads().filter((lead) => lead.priority === priority);
 };
 
-export const getTodayFollowUps = (): Lead[] => {
-  const today = new Date().toISOString().split('T')[0];
-  return getAllLeads().filter((lead) => lead.followUpDate === today);
+export const getTodayFollowUps = async (): Promise<Lead[]> => {
+  try {
+    const leads = await getAllLeads();
+    const today = new Date().toISOString().split('T')[0];
+    return leads.filter((lead) => lead.followUpDate === today);
+  } catch (error) {
+    console.error('Failed to get today follow-ups:', error);
+    return getTodayFollowUpsLocal();
+  }
 };
 
-export const getUpcomingFollowUps = (days: number = 7): Lead[] => {
+export const getUpcomingFollowUps = async (days: number = 7): Promise<Lead[]> => {
+  try {
+    const leads = await getAllLeads();
+    const today = new Date();
+    const futureDate = new Date(today);
+    futureDate.setDate(futureDate.getDate() + days);
+    const todayStr = today.toISOString().split('T')[0];
+    const futureDateStr = futureDate.toISOString().split('T')[0];
+    return leads.filter((lead) => lead.followUpDate && lead.followUpDate >= todayStr && lead.followUpDate <= futureDateStr);
+  } catch (error) {
+    console.error('Failed to get upcoming follow-ups:', error);
+    return getUpcomingFollowUpsLocal(days);
+  }
+};
+
+// Legacy local functions
+const getTodayFollowUpsLocal = (): Lead[] => {
+  const today = new Date().toISOString().split('T')[0];
+  return getAllLeadsLocal().filter((lead) => lead.followUpDate === today);
+};
+
+const getUpcomingFollowUpsLocal = (days: number = 7): Lead[] => {
   const today = new Date();
   const futureDate = new Date(today);
   futureDate.setDate(futureDate.getDate() + days);
   const todayStr = today.toISOString().split('T')[0];
   const futureDateStr = futureDate.toISOString().split('T')[0];
-  return getAllLeads().filter((lead) => lead.followUpDate >= todayStr && lead.followUpDate <= futureDateStr);
+  return getAllLeadsLocal().filter((lead) => lead.followUpDate && lead.followUpDate >= todayStr && lead.followUpDate <= futureDateStr);
 };
 
 // ========================
 // ACTIVITIES OPERATIONS
 // ========================
 
-export const getAllActivities = (): Activity[] => {
+export const getAllActivities = async (): Promise<Activity[]> => {
+  try {
+    return await apiRequest('/api/activities');
+  } catch (error) {
+    console.error('Failed to fetch activities:', error);
+    return getAllActivitiesLocal();
+  }
+};
+
+export const getActivitiesByLeadId = async (leadId: string): Promise<Activity[]> => {
+  try {
+    const activities = await getAllActivities();
+    return activities.filter(a => a.leadId === leadId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  } catch (error) {
+    console.error('Failed to fetch activities:', error);
+    return getActivitiesByLeadIdLocal(leadId);
+  }
+};
+
+export const addActivity = async (leadId: string, type: ActivityType, description: string): Promise<Activity> => {
+  try {
+    const newActivity = await apiRequest('/api/activities', {
+      method: 'POST',
+      body: JSON.stringify({ leadId, type, description }),
+    });
+    return newActivity;
+  } catch (error) {
+    console.error('Failed to create activity:', error);
+    return addActivityLocal(leadId, type, description);
+  }
+};
+
+// Legacy localStorage functions for activities
+const getAllActivitiesLocal = (): Activity[] => {
   if (typeof window === 'undefined') return [];
   try {
     initializeUserData();
@@ -161,12 +342,12 @@ export const getAllActivities = (): Activity[] => {
   }
 };
 
-export const getActivitiesByLeadId = (leadId: string): Activity[] => {
-  return getAllActivities().filter(a => a.leadId === leadId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+const getActivitiesByLeadIdLocal = (leadId: string): Activity[] => {
+  return getAllActivitiesLocal().filter(a => a.leadId === leadId).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 };
 
-export const addActivity = (leadId: string, type: ActivityType, description: string): Activity => {
-  const activities = getAllActivities();
+const addActivityLocal = (leadId: string, type: ActivityType, description: string): Activity => {
+  const activities = getAllActivitiesLocal();
   const newActivity: Activity = {
     id: `act_${Date.now()}`,
     leadId,
@@ -177,6 +358,8 @@ export const addActivity = (leadId: string, type: ActivityType, description: str
   };
   activities.push(newActivity);
   safeStorage.setItem(getUserStorageKey('activities'), JSON.stringify(activities));
+  return newActivity;
+};
   return newActivity;
 };
 
@@ -246,7 +429,62 @@ export const deleteTask = (id: string): boolean => {
 // EXPENSES OPERATIONS
 // ========================
 
-export const getAllExpenses = (): Expense[] => {
+export const getAllExpenses = async (): Promise<Expense[]> => {
+  try {
+    return await apiRequest('/api/expenses');
+  } catch (error) {
+    console.error('Failed to fetch expenses:', error);
+    return getAllExpensesLocal();
+  }
+};
+
+export const createExpense = async (expense: Omit<Expense, 'id' | 'createdAt'>): Promise<Expense> => {
+  try {
+    const newExpense = await apiRequest('/api/expenses', {
+      method: 'POST',
+      body: JSON.stringify(expense),
+    });
+    return newExpense;
+  } catch (error) {
+    console.error('Failed to create expense:', error);
+    return createExpenseLocal(expense);
+  }
+};
+
+export const getExpensesByDateRange = async (startDate: string, endDate: string): Promise<Expense[]> => {
+  try {
+    const expenses = await getAllExpenses();
+    return expenses.filter(e => e.date >= startDate && e.date <= endDate);
+  } catch (error) {
+    console.error('Failed to fetch expenses by date range:', error);
+    return getExpensesByDateRangeLocal(startDate, endDate);
+  }
+};
+
+export const getExpensesByType = async (type: ExpenseType): Promise<Expense[]> => {
+  try {
+    const expenses = await getAllExpenses();
+    return expenses.filter(e => e.type === type);
+  } catch (error) {
+    console.error('Failed to fetch expenses by type:', error);
+    return getExpensesByTypeLocal(type);
+  }
+};
+
+export const deleteExpense = async (id: string): Promise<boolean> => {
+  try {
+    // Note: We don't have a DELETE endpoint for expenses yet, so this will fail
+    // For now, we'll just return false to indicate failure
+    console.warn('Delete expense API not implemented yet');
+    return false;
+  } catch (error) {
+    console.error('Failed to delete expense:', error);
+    return deleteExpenseLocal(id);
+  }
+};
+
+// Legacy localStorage functions for expenses
+const getAllExpensesLocal = (): Expense[] => {
   if (typeof window === 'undefined') return [];
   try {
     initializeUserData();
@@ -257,24 +495,24 @@ export const getAllExpenses = (): Expense[] => {
   }
 };
 
-export const createExpense = (expense: Omit<Expense, 'id' | 'createdAt'>): Expense => {
-  const expenses = getAllExpenses();
+const createExpenseLocal = (expense: Omit<Expense, 'id' | 'createdAt'>): Expense => {
+  const expenses = getAllExpensesLocal();
   const newExpense: Expense = { ...expense, id: `exp_${Date.now()}`, createdAt: new Date().toISOString() };
   expenses.push(newExpense);
   safeStorage.setItem(getUserStorageKey('expenses'), JSON.stringify(expenses));
   return newExpense;
 };
 
-export const getExpensesByDateRange = (startDate: string, endDate: string): Expense[] => {
-  return getAllExpenses().filter(e => e.date >= startDate && e.date <= endDate);
+const getExpensesByDateRangeLocal = (startDate: string, endDate: string): Expense[] => {
+  return getAllExpensesLocal().filter(e => e.date >= startDate && e.date <= endDate);
 };
 
-export const getExpensesByType = (type: ExpenseType): Expense[] => {
-  return getAllExpenses().filter(e => e.type === type);
+const getExpensesByTypeLocal = (type: ExpenseType): Expense[] => {
+  return getAllExpensesLocal().filter(e => e.type === type);
 };
 
-export const deleteExpense = (id: string): boolean => {
-  const expenses = getAllExpenses();
+const deleteExpenseLocal = (id: string): boolean => {
+  const expenses = getAllExpensesLocal();
   const filtered = expenses.filter(e => e.id !== id);
   if (filtered.length === expenses.length) return false;
   safeStorage.setItem(getUserStorageKey('expenses'), JSON.stringify(filtered));
@@ -320,23 +558,38 @@ export const deleteTemplate = (id: string): boolean => {
 // ANALYTICS
 // ========================
 
-export const getSourceAnalytics = (): SourceAnalytics[] => {
-  const leads = getAllLeads();
-  const sourceMap = new Map<string, { count: number; revenue: number }>();
+export const getSourceAnalytics = async (): Promise<{ source: string; count: number }[]> => {
+  try {
+    const leads = await getAllLeads();
+    const sourceMap = new Map<string, number>();
+
+    leads.forEach(lead => {
+      const source = lead.source || 'Unknown';
+      sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
+    });
+
+    return Array.from(sourceMap.entries())
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count);
+  } catch (error) {
+    console.error('Failed to get source analytics:', error);
+    return getSourceAnalyticsLocal();
+  }
+};
+
+// Legacy local function
+const getSourceAnalyticsLocal = (): { source: string; count: number }[] => {
+  const leads = getAllLeadsLocal();
+  const sourceMap = new Map<string, number>();
 
   leads.forEach(lead => {
     const source = lead.source || 'Unknown';
-    const existing = sourceMap.get(source) || { count: 0, revenue: 0 };
-    sourceMap.set(source, { count: existing.count + 1, revenue: existing.revenue + (lead.revenue || 0) });
+    sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
   });
 
-  const totalLeads = leads.length || 1;
-  return Array.from(sourceMap.entries()).map(([source, data]) => ({
-    source,
-    count: data.count,
-    revenue: data.revenue,
-    percentage: Math.round((data.count / totalLeads) * 100),
-  })).sort((a, b) => b.count - a.count);
+  return Array.from(sourceMap.entries())
+    .map(([source, count]) => ({ source, count }))
+    .sort((a, b) => b.count - a.count);
 };
 
 export const getRevenueForecast = (): ForecastData[] => {
@@ -380,12 +633,60 @@ export const calculateROI = (): number => {
   return ((calculateTotalRevenue() - adsExpenses) / adsExpenses) * 100;
 };
 
-export const getFinancialSummary = () => ({
-  totalRevenue: calculateTotalRevenue(),
-  totalExpenses: calculateTotalExpenses(),
-  profit: calculateProfit(),
-  roiFromAds: calculateROI(),
-});
+export const getFinancialSummary = async () => {
+  try {
+    const [leads, expenses] = await Promise.all([
+      getAllLeads(),
+      getAllExpenses(),
+    ]);
+
+    const totalRevenue = leads.reduce((sum, lead) => sum + (lead.revenue || 0), 0);
+    const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const profit = totalRevenue - totalExpenses;
+
+    const adsExpenses = expenses.filter(e => e.type === ExpenseType.META_ADS).reduce((sum, e) => sum + e.amount, 0);
+    const roiFromAds = adsExpenses === 0 ? 0 : ((totalRevenue - adsExpenses) / adsExpenses) * 100;
+
+    return {
+      totalRevenue,
+      totalExpenses,
+      profit,
+      roiFromAds,
+    };
+  } catch (error) {
+    console.error('Failed to get financial summary:', error);
+    // Fallback to local calculations
+    return {
+      totalRevenue: calculateTotalRevenueLocal(),
+      totalExpenses: calculateTotalExpensesLocal(),
+      profit: calculateProfitLocal(),
+      roiFromAds: calculateROILocal(),
+    };
+  }
+};
+
+// Legacy local calculation functions
+const calculateTotalRevenueLocal = (): number => {
+  return getAllLeadsLocal().reduce((sum, lead) => sum + (lead.revenue || 0), 0);
+};
+
+const calculateTotalExpensesLocal = (): number => {
+  return getAllExpensesLocal().reduce((sum, expense) => sum + expense.amount, 0);
+};
+
+const calculateProfitLocal = (): number => {
+  return calculateTotalRevenueLocal() - calculateTotalExpensesLocal();
+};
+
+const calculateAdsExpensesLocal = (): number => {
+  return getAllExpensesLocal().filter(e => e.type === ExpenseType.META_ADS).reduce((sum, e) => sum + e.amount, 0);
+};
+
+const calculateROILocal = (): number => {
+  const adsExpenses = calculateAdsExpensesLocal();
+  if (adsExpenses === 0) return 0;
+  return ((calculateTotalRevenueLocal() - adsExpenses) / adsExpenses) * 100;
+};
 
 // ========================
 // DATA CLEARING
