@@ -45,13 +45,13 @@ export async function POST(request: NextRequest) {
     // Hash password
     const passwordHash = await hash(password, 12);
 
-    // Create user
+    // Create user with free plan
     const user = await prisma.user.create({
       data: {
         email: email.toLowerCase(),
         name,
         passwordHash,
-        plan: 'starter',
+        plan: 'free',
         subscriptionStatus: 'active',
       },
       select: {
