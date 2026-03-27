@@ -20,7 +20,47 @@ const getAuthToken = (): string | null => {
   }
 };
 
-const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
+const getRefreshToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const token = localStorage.getItem('refreshToken');
+    return token;
+  } catch {
+    return null;
+  }
+};
+
+const refreshAccessToken = async (): Promise<string | null> => {
+  try {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return null;
+
+    const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    if (!response.ok) {
+      // Clear tokens on failure
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      return null;
+    }
+
+    const data = await response.json();
+    localStorage.setItem('accessToken', data.accessToken);
+    localStorage.setItem('refreshToken', data.refreshToken);
+    return data.accessToken;
+  } catch {
+    // Clear tokens on error
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    return null;
+  }
+};
+
+const apiRequest = async (endpoint: string, options: RequestInit = {}, retryCount = 0) => {
   const token = getAuthToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -33,6 +73,25 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   });
 
   if (!response.ok) {
+    // If unauthorized and we haven't retried yet, try to refresh token
+    if (response.status === 401 && retryCount === 0) {
+      const newToken = await refreshAccessToken();
+      if (newToken) {
+        // Retry the request with the new token
+        const newHeaders: HeadersInit = {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${newToken}`,
+        };
+        const retryResponse = await fetch(`${API_BASE}${endpoint}`, {
+          ...options,
+          headers: { ...newHeaders, ...options.headers },
+        });
+        if (retryResponse.ok) {
+          return retryResponse.json();
+        }
+      }
+    }
+
     const error = await response.json().catch(() => ({ error: 'Network error' }));
     throw new Error(error.error || `HTTP ${response.status}`);
   }
@@ -143,8 +202,8 @@ export const createLead = async (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedA
     return newLead;
   } catch (error) {
     console.error('Failed to create lead:', error);
-    // Fallback to localStorage
-    return createLeadLocal(lead);
+    // Don't fallback to localStorage - throw error so user knows data wasn't saved
+    throw new Error('Failed to save lead to database. Please check your connection and try again.');
   }
 };
 
@@ -157,8 +216,8 @@ export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Le
     return updatedLead;
   } catch (error) {
     console.error('Failed to update lead:', error);
-    // Fallback to localStorage
-    return updateLeadLocal(id, updates);
+    // Don't fallback to localStorage - throw error so user knows data wasn't saved
+    throw new Error('Failed to update lead in database. Please check your connection and try again.');
   }
 };
 
@@ -220,37 +279,14 @@ const deleteLeadLocal = (id: string): boolean => {
   return true;
 };
 
-export const updateLead = (id: string, updates: Partial<Lead>): Lead | null => {
-  const leads = getAllLeads();
-  const index = leads.findIndex((lead) => lead.id === id);
-  if (index === -1) return null;
-
-  const oldStatus = leads[index].status;
-  const updatedLead = { ...leads[index], ...updates, id: leads[index].id, createdAt: leads[index].createdAt, updatedAt: new Date().toISOString() };
-  leads[index] = updatedLead;
-  safeStorage.setItem(getUserStorageKey('leads'), JSON.stringify(leads));
-
-  if (updates.status && updates.status !== oldStatus) {
-    addActivity(id, ActivityType.STATUS_CHANGE, `Status changed from ${oldStatus} to ${updates.status}`);
-  }
-
-  return updatedLead;
+export const getLeadsByStatus = async (status: LeadStatus): Promise<Lead[]> => {
+  const leads = await getAllLeads();
+  return leads.filter((lead) => lead.status === status);
 };
 
-export const deleteLead = (id: string): boolean => {
-  const leads = getAllLeads();
-  const filtered = leads.filter((lead) => lead.id !== id);
-  if (filtered.length === leads.length) return false;
-  safeStorage.setItem(getUserStorageKey('leads'), JSON.stringify(filtered));
-  return true;
-};
-
-export const getLeadsByStatus = (status: LeadStatus): Lead[] => {
-  return getAllLeads().filter((lead) => lead.status === status);
-};
-
-export const getLeadsByPriority = (priority: Priority): Lead[] => {
-  return getAllLeads().filter((lead) => lead.priority === priority);
+export const getLeadsByPriority = async (priority: Priority): Promise<Lead[]> => {
+  const leads = await getAllLeads();
+  return leads.filter((lead) => lead.priority === priority);
 };
 
 export const getTodayFollowUps = async (): Promise<Lead[]> => {
@@ -360,11 +396,9 @@ const addActivityLocal = (leadId: string, type: ActivityType, description: strin
   safeStorage.setItem(getUserStorageKey('activities'), JSON.stringify(activities));
   return newActivity;
 };
-  return newActivity;
-};
 
 export const deleteActivity = (id: string): boolean => {
-  const activities = getAllActivities();
+  const activities = getAllActivitiesLocal();
   const filtered = activities.filter(a => a.id !== id);
   if (filtered.length === activities.length) return false;
   safeStorage.setItem(getUserStorageKey('activities'), JSON.stringify(filtered));
@@ -558,18 +592,28 @@ export const deleteTemplate = (id: string): boolean => {
 // ANALYTICS
 // ========================
 
-export const getSourceAnalytics = async (): Promise<{ source: string; count: number }[]> => {
+export const getSourceAnalytics = async (): Promise<SourceAnalytics[]> => {
   try {
     const leads = await getAllLeads();
-    const sourceMap = new Map<string, number>();
+    const sourceMap = new Map<string, { count: number; revenue: number }>();
 
     leads.forEach(lead => {
       const source = lead.source || 'Unknown';
-      sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
+      const current = sourceMap.get(source) || { count: 0, revenue: 0 };
+      sourceMap.set(source, {
+        count: current.count + 1,
+        revenue: current.revenue + (lead.revenue || 0)
+      });
     });
 
+    const totalLeads = leads.length;
     return Array.from(sourceMap.entries())
-      .map(([source, count]) => ({ source, count }))
+      .map(([source, data]) => ({
+        source,
+        count: data.count,
+        revenue: data.revenue,
+        percentage: totalLeads > 0 ? Math.round((data.count / totalLeads) * 100) : 0
+      }))
       .sort((a, b) => b.count - a.count);
   } catch (error) {
     console.error('Failed to get source analytics:', error);
@@ -578,22 +622,32 @@ export const getSourceAnalytics = async (): Promise<{ source: string; count: num
 };
 
 // Legacy local function
-const getSourceAnalyticsLocal = (): { source: string; count: number }[] => {
+const getSourceAnalyticsLocal = (): SourceAnalytics[] => {
   const leads = getAllLeadsLocal();
-  const sourceMap = new Map<string, number>();
+  const sourceMap = new Map<string, { count: number; revenue: number }>();
 
   leads.forEach(lead => {
     const source = lead.source || 'Unknown';
-    sourceMap.set(source, (sourceMap.get(source) || 0) + 1);
+    const current = sourceMap.get(source) || { count: 0, revenue: 0 };
+    sourceMap.set(source, {
+      count: current.count + 1,
+      revenue: current.revenue + (lead.revenue || 0)
+    });
   });
 
+  const totalLeads = leads.length;
   return Array.from(sourceMap.entries())
-    .map(([source, count]) => ({ source, count }))
+    .map(([source, data]) => ({
+      source,
+      count: data.count,
+      revenue: data.revenue,
+      percentage: totalLeads > 0 ? Math.round((data.count / totalLeads) * 100) : 0
+    }))
     .sort((a, b) => b.count - a.count);
 };
 
-export const getRevenueForecast = (): ForecastData[] => {
-  const leads = getAllLeads();
+export const getRevenueForecast = async (): Promise<ForecastData[]> => {
+  const leads = await getAllLeads();
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
@@ -623,14 +677,26 @@ export const getRevenueForecast = (): ForecastData[] => {
 // FINANCIAL CALCULATIONS
 // ========================
 
-export const calculateTotalRevenue = (): number => getAllLeads().reduce((sum, lead) => sum + (lead.revenue || 0), 0);
-export const calculateTotalExpenses = (): number => getAllExpenses().reduce((sum, expense) => sum + expense.amount, 0);
-export const calculateProfit = (): number => calculateTotalRevenue() - calculateTotalExpenses();
-export const calculateAdsExpenses = (): number => getAllExpenses().filter(e => e.type === ExpenseType.META_ADS).reduce((sum, e) => sum + e.amount, 0);
-export const calculateROI = (): number => {
-  const adsExpenses = calculateAdsExpenses();
+export const calculateTotalRevenue = async (): Promise<number> => {
+  const leads = await getAllLeads();
+  return leads.reduce((sum, lead) => sum + (lead.revenue || 0), 0);
+};
+export const calculateTotalExpenses = async (): Promise<number> => {
+  const expenses = await getAllExpenses();
+  return expenses.reduce((sum, expense) => sum + expense.amount, 0);
+};
+export const calculateProfit = async (): Promise<number> => {
+  const [revenue, expenses] = await Promise.all([calculateTotalRevenue(), calculateTotalExpenses()]);
+  return revenue - expenses;
+};
+export const calculateAdsExpenses = async (): Promise<number> => {
+  const expenses = await getAllExpenses();
+  return expenses.filter(e => e.type === ExpenseType.META_ADS).reduce((sum, e) => sum + e.amount, 0);
+};
+export const calculateROI = async (): Promise<number> => {
+  const [adsExpenses, totalRevenue] = await Promise.all([calculateAdsExpenses(), calculateTotalRevenue()]);
   if (adsExpenses === 0) return 0;
-  return ((calculateTotalRevenue() - adsExpenses) / adsExpenses) * 100;
+  return ((totalRevenue - adsExpenses) / adsExpenses) * 100;
 };
 
 export const getFinancialSummary = async () => {

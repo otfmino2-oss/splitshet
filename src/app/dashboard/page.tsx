@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lead, LeadStatus, Priority } from '@/types';
+import { Lead, LeadStatus, Priority, SourceAnalytics } from '@/types';
 import { getAllLeads, createLead, updateLead, deleteLead, getFinancialSummary, getTodayFollowUps, getSourceAnalytics } from '@/lib/dataService';
 import { useAuth } from '@/lib/authContext';
 import { Header } from '@/components/Header';
@@ -16,7 +16,7 @@ export default function Dashboard() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [financial, setFinancial] = useState({ totalRevenue: 0, totalExpenses: 0, profit: 0, roiFromAds: 0 });
   const [todayFollowUps, setTodayFollowUps] = useState<Lead[]>([]);
-  const [sourceData, setSourceData] = useState<{ source: string; count: number }[]>([]);
+  const [sourceData, setSourceData] = useState<SourceAnalytics[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(false);
@@ -96,7 +96,7 @@ export default function Dashboard() {
       setShowAddModal(false);
     } catch (error) {
       console.error('Failed to create lead:', error);
-      alert('Failed to create lead. Please try again.');
+      alert(error instanceof Error ? error.message : 'Failed to create lead. Please try again.');
     } finally {
       setLoading(false);
     }
