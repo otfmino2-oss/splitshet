@@ -25,7 +25,11 @@ export async function GET(
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
-    return NextResponse.json(lead);
+    return NextResponse.json(lead, {
+      headers: {
+        'Cache-Control': 'private, max-age=60',
+      },
+    });
   } catch (error) {
     console.error('Get lead error:', error);
     return NextResponse.json(

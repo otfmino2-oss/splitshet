@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
     const source = searchParams.get('source');
     const limit = searchParams.get('limit');
     const offset = searchParams.get('offset');
+    const fields = searchParams.get('fields');
 
     const where: any = { userId: user.userId };
 
@@ -77,14 +78,24 @@ export async function GET(request: NextRequest) {
     const take = limit ? parseInt(limit) : undefined;
     const skip = offset ? parseInt(offset) : undefined;
 
+    // Support selective field fetching for reduced payload
+    const select = fields
+      ? Object.fromEntries(fields.split(',').map(f => [f.trim(), true]))
+      : undefined;
+
     const leads = await prisma.lead.findMany({
       where,
       take,
       skip,
+      ...(select && { select }),
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json(leads);
+    return NextResponse.json(leads, {
+      headers: {
+        'Cache-Control': 'private, max-age=30',
+      },
+    });
   } catch (error) {
     console.error('Get leads error:', error);
     return NextResponse.json(

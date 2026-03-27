@@ -170,16 +170,57 @@ const initializeUserData = () => {
 };
 
 // ========================
+// RESPONSE CACHING
+// ========================
+
+const responseCache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_DURATION = 30000; // 30 seconds cache
+
+const getCached = async <T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  duration = CACHE_DURATION
+): Promise<T> => {
+  const now = Date.now();
+  const cached = responseCache.get(key);
+  
+  if (cached && now - cached.timestamp < duration) {
+    return cached.data as T;
+  }
+  
+  const data = await fetcher();
+  responseCache.set(key, { data, timestamp: now });
+  return data;
+};
+
+// ========================
 // LEADS OPERATIONS
 // ========================
 
-export const getAllLeads = async (): Promise<Lead[]> => {
+export const getAllLeads = async (useCache = true): Promise<Lead[]> => {
   try {
-    return await apiRequest('/api/leads');
+    return await (useCache
+      ? getCached('leads', () => apiRequest('/api/leads'))
+      : apiRequest('/api/leads'));
   } catch (error) {
     console.error('Failed to fetch leads:', error);
-    // Fallback to localStorage for offline functionality
     return getAllLeadsLocal();
+  }
+};
+
+export const getDashboardData = async () => {
+  try {
+    return await getCached('dashboard', () => apiRequest('/api/dashboard/summary'), 60000);
+  } catch (error) {
+    console.error('Failed to fetch dashboard data:', error);
+    // Fallback to local calculations
+    const leads = getAllLeadsLocal();
+    return {
+      stats: { total: leads.length, byStatus: {}, byPriority: {} },
+      todayFollowUps: [],
+      financial: { totalRevenue: 0, totalExpenses: 0, profit: 0, roiFromAds: 0 },
+      sourceAnalytics: [],
+    };
   }
 };
 
@@ -377,9 +418,9 @@ export const getLeadsByPriority = async (priority: Priority): Promise<Lead[]> =>
 
 export const getTodayFollowUps = async (): Promise<Lead[]> => {
   try {
-    const leads = await getAllLeads();
-    const today = new Date().toISOString().split('T')[0];
-    return leads.filter((lead) => lead.followUpDate === today);
+    // Use getDashboardData which includes today's follow-ups optimized server-side
+    const dashboardData = await getDashboardData();
+    return dashboardData.todayFollowUps;
   } catch (error) {
     console.error('Failed to get today follow-ups:', error);
     return getTodayFollowUpsLocal();
@@ -680,27 +721,8 @@ export const deleteTemplate = (id: string): boolean => {
 
 export const getSourceAnalytics = async (): Promise<SourceAnalytics[]> => {
   try {
-    const leads = await getAllLeads();
-    const sourceMap = new Map<string, { count: number; revenue: number }>();
-
-    leads.forEach(lead => {
-      const source = lead.source || 'Unknown';
-      const current = sourceMap.get(source) || { count: 0, revenue: 0 };
-      sourceMap.set(source, {
-        count: current.count + 1,
-        revenue: current.revenue + (lead.revenue || 0)
-      });
-    });
-
-    const totalLeads = leads.length;
-    return Array.from(sourceMap.entries())
-      .map(([source, data]) => ({
-        source,
-        count: data.count,
-        revenue: data.revenue,
-        percentage: totalLeads > 0 ? Math.round((data.count / totalLeads) * 100) : 0
-      }))
-      .sort((a, b) => b.count - a.count);
+    const dashboardData = await getDashboardData();
+    return dashboardData.sourceAnalytics;
   } catch (error) {
     console.error('Failed to get source analytics:', error);
     return getSourceAnalyticsLocal();
@@ -787,24 +809,8 @@ export const calculateROI = async (): Promise<number> => {
 
 export const getFinancialSummary = async () => {
   try {
-    const [leads, expenses] = await Promise.all([
-      getAllLeads(),
-      getAllExpenses(),
-    ]);
-
-    const totalRevenue = leads.reduce((sum, lead) => sum + (lead.revenue || 0), 0);
-    const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const profit = totalRevenue - totalExpenses;
-
-    const adsExpenses = expenses.filter(e => e.type === ExpenseType.META_ADS).reduce((sum, e) => sum + e.amount, 0);
-    const roiFromAds = adsExpenses === 0 ? 0 : ((totalRevenue - adsExpenses) / adsExpenses) * 100;
-
-    return {
-      totalRevenue,
-      totalExpenses,
-      profit,
-      roiFromAds,
-    };
+    const dashboardData = await getDashboardData();
+    return dashboardData.financial;
   } catch (error) {
     console.error('Failed to get financial summary:', error);
     // Fallback to local calculations
@@ -814,6 +820,14 @@ export const getFinancialSummary = async () => {
       profit: calculateProfitLocal(),
       roiFromAds: calculateROILocal(),
     };
+  }
+};
+
+export const invalidateCache = (key?: string) => {
+  if (key) {
+    responseCache.delete(key);
+  } else {
+    responseCache.clear();
   }
 };
 

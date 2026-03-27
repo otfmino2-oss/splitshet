@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lead, LeadStatus, Priority, SourceAnalytics } from '@/types';
-import { getAllLeads, createLead, updateLead, deleteLead, getFinancialSummary, getTodayFollowUps, getSourceAnalytics } from '@/lib/dataService';
+import { getDashboardData, createLead, updateLead, deleteLead, invalidateCache } from '@/lib/dataService';
 import { useAuth } from '@/lib/authContext';
 import { Header } from '@/components/Header';
 
@@ -26,25 +26,20 @@ export default function Dashboard() {
     followUpDate: '', lastMessage: '', notes: '', revenue: 0,
   });
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [leadsData, financialData, followUpsData, sourceDataResult] = await Promise.all([
-        getAllLeads(),
-        getFinancialSummary(),
-        getTodayFollowUps(),
-        getSourceAnalytics(),
-      ]);
-      setLeads(leadsData);
-      setFinancial(financialData);
-      setTodayFollowUps(followUpsData);
-      setSourceData(sourceDataResult);
+      const dashboardData = await getDashboardData();
+      setLeads(dashboardData.stats.leads || []);
+      setFinancial(dashboardData.financial);
+      setTodayFollowUps(dashboardData.todayFollowUps);
+      setSourceData(dashboardData.sourceAnalytics);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.push('/login');
@@ -81,11 +76,11 @@ export default function Dashboard() {
     return 'Good evening';
   };
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setFormData({ name: '', contact: '', source: '', status: LeadStatus.NEW, priority: Priority.MEDIUM, followUpDate: '', lastMessage: '', notes: '', revenue: 0 });
-  };
+  }, []);
 
-  const handleAdd = async () => {
+  const handleAdd = useCallback(async () => {
     if (!formData.name || !formData.contact) return;
 
     try {
@@ -95,6 +90,7 @@ export default function Dashboard() {
         templatesUsed: [],
         followUpDate: formData.followUpDate?.trim() ?? '',
       });
+      invalidateCache('dashboard');
       await loadData();
       resetForm();
       setShowAddModal(false);
@@ -104,9 +100,9 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData, loadData, resetForm]);
 
-  const handleEdit = async () => {
+  const handleEdit = useCallback(async () => {
     if (!editingLead || !formData.name || !formData.contact) return;
 
     try {
@@ -115,6 +111,7 @@ export default function Dashboard() {
         ...formData,
         followUpDate: formData.followUpDate?.trim() ?? '',
       });
+      invalidateCache('dashboard');
       await loadData();
       setEditingLead(null);
       resetForm();
@@ -124,14 +121,15 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [editingLead, formData, loadData, resetForm]);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     if (!confirm('Delete this lead?')) return;
 
     try {
       setLoading(true);
       await deleteLead(id);
+      invalidateCache('dashboard');
       await loadData();
     } catch (error) {
       console.error('Failed to delete lead:', error);
@@ -139,9 +137,9 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadData]);
 
-  const openEdit = (lead: Lead) => {
+  const openEdit = useCallback((lead: Lead) => {
     // Convert followUpDate from ISO string to YYYY-MM-DD format for date input
     const followUpDateValue = lead.followUpDate
       ? new Date(lead.followUpDate).toISOString().split('T')[0]
@@ -159,7 +157,7 @@ export default function Dashboard() {
       revenue: lead.revenue
     });
     setEditingLead(lead);
-  };
+  }, []);
 
   const getStatusColor = (status: LeadStatus) => ({
     [LeadStatus.NEW]: '#3B82F6', [LeadStatus.CONTACTED]: '#F59E0B', [LeadStatus.INTERESTED]: '#A855F7', [LeadStatus.CLOSED_WON]: '#10B981', [LeadStatus.CLOSED_LOST]: '#EF4444',
