@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { createLeadSchema } from '@/lib/validations';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { parseRequestBody, apiErrorToResponse, logError, ApiError } from '@/lib/errorHandler';
+import { parseIntSafe, sanitizeString } from '@/lib/paramParsing';
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,9 +12,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rawBody = await request.json();
-    if (rawBody.followUpDate === '') {
-      delete rawBody.followUpDate;
+    // Safe JSON parsing
+    let rawBody: unknown;
+    try {
+      rawBody = await parseRequestBody(request);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return apiErrorToResponse(error);
+      }
+      return apiErrorToResponse(new ApiError('Invalid request format', 400));
+    }
+
+    // Handle empty followUpDate
+    if (typeof rawBody === 'object' && rawBody !== null && 'followUpDate' in rawBody) {
+      const obj = rawBody as Record<string, unknown>;
+      if (obj.followUpDate === '') {
+        delete obj.followUpDate;
+      }
     }
 
     const validationResult = createLeadSchema.safeParse(rawBody);
@@ -32,25 +48,22 @@ export async function POST(request: NextRequest) {
     const lead = await prisma.lead.create({
       data: {
         userId: user.userId,
-        name: leadData.name,
-        contact: leadData.contact,
-        source: leadData.source || '',
-        status: leadData.status || 'New',
-        priority: leadData.priority || 'Medium',
+        name: sanitizeString(leadData.name, 255),
+        contact: sanitizeString(leadData.contact, 255),
+        source: leadData.source ? sanitizeString(leadData.source, 100) : '',
+        status: leadData.status ? sanitizeString(leadData.status, 50) : 'New',
+        priority: leadData.priority ? sanitizeString(leadData.priority, 50) : 'Medium',
         followUpDate: leadData.followUpDate ? new Date(leadData.followUpDate) : null,
-        lastMessage: leadData.lastMessage || '',
-        notes: leadData.notes || '',
+        lastMessage: leadData.lastMessage ? sanitizeString(leadData.lastMessage, 5000) : '',
+        notes: leadData.notes ? sanitizeString(leadData.notes, 5000) : '',
         revenue: leadData.revenue || 0,
       },
     });
 
     return NextResponse.json(lead, { status: 201 });
   } catch (error) {
-    console.error('Create lead error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    logError('create_lead', error);
+    return apiErrorToResponse(error);
   }
 }
 
@@ -71,22 +84,29 @@ export async function GET(request: NextRequest) {
 
     const where: any = { userId: user.userId };
 
-    if (status) where.status = status;
-    if (priority) where.priority = priority;
-    if (source) where.source = source;
+    if (status) where.status = sanitizeString(status, 50);
+    if (priority) where.priority = sanitizeString(priority, 50);
+    if (source) where.source = sanitizeString(source, 100);
 
-    const take = limit ? parseInt(limit) : undefined;
-    const skip = offset ? parseInt(offset) : undefined;
+    // Safe parseInt with bounds checking
+    const take = parseIntSafe(limit, undefined, 1, 100);
+    const skip = parseIntSafe(offset, undefined, 0);
 
     // Support selective field fetching for reduced payload
+    const ALLOWED_FIELDS = ['id', 'name', 'contact', 'status', 'priority', 'source', 'revenue', 'createdAt'] as const;
     const select = fields
-      ? Object.fromEntries(fields.split(',').map(f => [f.trim(), true]))
+      ? Object.fromEntries(
+          fields
+            .split(',')
+            .map(f => [f.trim(), true])
+            .filter(([f]) => ALLOWED_FIELDS.includes(f as typeof ALLOWED_FIELDS[number]))
+        )
       : undefined;
 
     const leads = await prisma.lead.findMany({
       where,
-      take,
-      skip,
+      take: take || undefined,
+      skip: skip || undefined,
       ...(select && { select }),
       orderBy: { createdAt: 'desc' },
     });
@@ -97,10 +117,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Get leads error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    logError('get_leads', error);
+    return apiErrorToResponse(error);
   }
 }

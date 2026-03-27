@@ -48,26 +48,41 @@ export default function TasksPage() {
     setFormData({ title: '', description: '', status: TaskStatus.TODO, priority: Priority.MEDIUM, dueDate: '', leadId: '' });
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!formData.title.trim()) return;
-    createTask({ ...formData, leadId: formData.leadId || undefined });
-    reload();
-    resetForm();
-    setShowAddModal(false);
+    try {
+      await createTask({ ...formData, leadId: formData.leadId || undefined });
+      await reload();
+      resetForm();
+      setShowAddModal(false);
+    } catch (error) {
+      console.error('Failed to add task:', error);
+      alert('Failed to add task. Please try again.');
+    }
   };
 
-  const handleEdit = () => {
+  const handleEdit = async () => {
     if (!editingTask || !formData.title.trim()) return;
-    updateTask(editingTask.id, { ...formData, leadId: formData.leadId || undefined });
-    reload();
-    setEditingTask(null);
-    resetForm();
+    try {
+      await updateTask(editingTask.id, { ...formData, leadId: formData.leadId || undefined });
+      await reload();
+      setEditingTask(null);
+      resetForm();
+    } catch (error) {
+      console.error('Failed to update task:', error);
+      alert('Failed to update task. Please try again.');
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Delete this task?')) {
-      deleteTask(id);
-      reload();
+      try {
+        await deleteTask(id);
+        await reload();
+      } catch (error) {
+        console.error('Failed to delete task:', error);
+        alert('Failed to delete task. Please try again.');
+      }
     }
   };
 
@@ -83,10 +98,15 @@ export default function TasksPage() {
     setEditingTask(task);
   };
 
-  const toggleStatus = (task: Task) => {
-    const nextStatus = task.status === TaskStatus.TODO ? TaskStatus.IN_PROGRESS : task.status === TaskStatus.IN_PROGRESS ? TaskStatus.DONE : TaskStatus.TODO;
-    updateTask(task.id, { status: nextStatus });
-    reload();
+  const toggleStatus = async (task: Task) => {
+    try {
+      const nextStatus = task.status === TaskStatus.TODO ? TaskStatus.IN_PROGRESS : task.status === TaskStatus.IN_PROGRESS ? TaskStatus.DONE : TaskStatus.TODO;
+      await updateTask(task.id, { status: nextStatus });
+      await reload();
+    } catch (error) {
+      console.error('Failed to update task status:', error);
+      alert('Failed to update task status. Please try again.');
+    }
   };
 
   const handleDragStart = (task: Task) => {
@@ -97,10 +117,15 @@ export default function TasksPage() {
     e.preventDefault();
   };
 
-  const handleDrop = (status: TaskStatus) => {
+  const handleDrop = async (status: TaskStatus) => {
     if (draggedTask && draggedTask.status !== status) {
-      updateTask(draggedTask.id, { status });
-      reload();
+      try {
+        await updateTask(draggedTask.id, { status });
+        await reload();
+      } catch (error) {
+        console.error('Failed to move task:', error);
+        alert('Failed to move task. Please try again.');
+      }
     }
     setDraggedTask(null);
   };

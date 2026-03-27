@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { updateLeadSchema } from '@/lib/validations';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { parseRequestBody, apiErrorToResponse, logError, ApiError } from '@/lib/errorHandler';
+import { sanitizeString } from '@/lib/paramParsing';
 
 export async function GET(
   request: NextRequest,
@@ -14,9 +16,12 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Sanitize ID
+    const sanitizedId = sanitizeString(id, 100);
+
     const lead = await prisma.lead.findFirst({
       where: {
-        id: id,
+        id: sanitizedId,
         userId: user.userId,
       },
     });
@@ -31,11 +36,8 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Get lead error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    logError('get_lead', error);
+    return apiErrorToResponse(error);
   }
 }
 
@@ -50,9 +52,15 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const rawBody = await request.json();
-    if (rawBody.followUpDate === '') {
-      delete rawBody.followUpDate;
+    // Safe JSON parsing
+    let rawBody: unknown;
+    try {
+      rawBody = await parseRequestBody(request);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return apiErrorToResponse(error);
+      }
+      return apiErrorToResponse(new ApiError('Invalid request format', 400));
     }
 
     const validationResult = updateLeadSchema.safeParse(rawBody);
@@ -67,25 +75,40 @@ export async function PUT(
       );
     }
 
+    const sanitizedId = sanitizeString(id, 100);
     const leadData = validationResult.data;
+
+    const updateData: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+
+    if (leadData.name) updateData.name = sanitizeString(leadData.name, 255);
+    if (leadData.contact) updateData.contact = sanitizeString(leadData.contact, 255);
+    if (leadData.source) updateData.source = sanitizeString(leadData.source, 100);
+    if (leadData.status) updateData.status = sanitizeString(leadData.status, 50);
+    if (leadData.priority) updateData.priority = sanitizeString(leadData.priority, 50);
+    if (leadData.lastMessage) updateData.lastMessage = sanitizeString(leadData.lastMessage, 5000);
+    if (leadData.notes) updateData.notes = sanitizeString(leadData.notes, 5000);
+    if (leadData.revenue !== undefined) updateData.revenue = leadData.revenue;
+    
+    // Handle followUpDate explicitly - can be set, cleared, or left unchanged
+    if ('followUpDate' in (rawBody as Record<string, unknown>)) {
+      const followUpDate = (rawBody as Record<string, unknown>).followUpDate;
+      if (followUpDate === '' || followUpDate === null) {
+        // Clear the follow-up date
+        updateData.followUpDate = null;
+      } else if (followUpDate) {
+        // Set the follow-up date
+        updateData.followUpDate = new Date(String(followUpDate));
+      }
+    }
 
     const lead = await prisma.lead.updateMany({
       where: {
-        id: id,
+        id: sanitizedId,
         userId: user.userId,
       },
-      data: {
-        name: leadData.name,
-        contact: leadData.contact,
-        source: leadData.source || '',
-        status: leadData.status || 'New',
-        priority: leadData.priority || 'Medium',
-        followUpDate: leadData.followUpDate ? new Date(leadData.followUpDate) : null,
-        lastMessage: leadData.lastMessage || '',
-        notes: leadData.notes || '',
-        revenue: leadData.revenue || 0,
-        updatedAt: new Date(),
-      },
+      data: updateData,
     });
 
     if (lead.count === 0) {
@@ -95,18 +118,15 @@ export async function PUT(
     // Get the updated lead
     const updatedLead = await prisma.lead.findFirst({
       where: {
-        id: id,
+        id: sanitizedId,
         userId: user.userId,
       },
     });
 
     return NextResponse.json(updatedLead);
   } catch (error) {
-    console.error('Update lead error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    logError('update_lead', error);
+    return apiErrorToResponse(error);
   }
 }
 
@@ -121,9 +141,11 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const sanitizedId = sanitizeString(id, 100);
+
     const lead = await prisma.lead.deleteMany({
       where: {
-        id: id,
+        id: sanitizedId,
         userId: user.userId,
       },
     });
@@ -134,10 +156,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Delete lead error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    logError('delete_lead', error);
+    return apiErrorToResponse(error);
   }
 }

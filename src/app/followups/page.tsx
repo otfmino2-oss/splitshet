@@ -25,24 +25,71 @@ export default function FollowUpsPage() {
   const [showOverdue, setShowOverdue] = useState(true);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) router.push('/login');
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login');
+    }
   }, [isAuthenticated, isLoading, router]);
 
   const loadData = useCallback(async () => {
     if (isAuthenticated) {
+      console.log('Loading all leads for follow-ups page...');
       const all = await getAllLeads();
+      console.log('All leads fetched:', all.length, all);
       setAllLeads(all);
+      
       const today = new Date().toISOString().split('T')[0];
-      const upcoming = all.filter(l => l.followUpDate && l.followUpDate >= today);
-      upcoming.sort((a, b) => new Date(a.followUpDate).getTime() - new Date(b.followUpDate).getTime());
+      // Properly convert followUpDate to a comparable format
+      const upcoming = all.filter(l => {
+        if (!l.followUpDate) return false;
+        // Convert followUpDate to string format YYYY-MM-DD if it's a Date object
+        const leadDate = typeof l.followUpDate === 'string' 
+          ? l.followUpDate 
+          : new Date(l.followUpDate).toISOString().split('T')[0];
+        return leadDate >= today;
+      });
+      console.log('Upcoming leads (with future follow-up dates):', upcoming.length);
+      upcoming.sort((a, b) => {
+        const dateA = typeof a.followUpDate === 'string' 
+          ? new Date(a.followUpDate).getTime() 
+          : new Date(a.followUpDate).getTime();
+        const dateB = typeof b.followUpDate === 'string' 
+          ? new Date(b.followUpDate).getTime() 
+          : new Date(b.followUpDate).getTime();
+        return dateA - dateB;
+      });
       setLeads(upcoming);
     }
   }, [isAuthenticated]);
 
+  // Load data when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      console.log('Follow-ups page mounted and authenticated, loading data...');
+      loadData();
+    }
+  }, [isAuthenticated, loadData]);
+
   const overdueLeads = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    return allLeads.filter(l => l.followUpDate && l.followUpDate < today && l.status !== LeadStatus.CLOSED_WON && l.status !== LeadStatus.CLOSED_LOST)
-      .sort((a, b) => new Date(a.followUpDate).getTime() - new Date(b.followUpDate).getTime());
+    return allLeads.filter(l => {
+      if (!l.followUpDate) return false;
+      // Properly convert to comparable date strings
+      const leadDate = typeof l.followUpDate === 'string' 
+        ? l.followUpDate 
+        : new Date(l.followUpDate).toISOString().split('T')[0];
+      const isOverdue = leadDate < today;
+      const isNotClosed = l.status !== LeadStatus.CLOSED_WON && l.status !== LeadStatus.CLOSED_LOST;
+      return isOverdue && isNotClosed;
+    })
+      .sort((a, b) => {
+        const dateA = typeof a.followUpDate === 'string' 
+          ? new Date(a.followUpDate).getTime() 
+          : new Date(a.followUpDate).getTime();
+        const dateB = typeof b.followUpDate === 'string' 
+          ? new Date(b.followUpDate).getTime() 
+          : new Date(b.followUpDate).getTime();
+        return dateA - dateB;
+      });
   }, [allLeads]);
 
   const filteredLeads = useMemo(() => {
@@ -66,7 +113,10 @@ export default function FollowUpsPage() {
 
     filteredLeads.forEach(lead => {
       if (!lead.followUpDate) return;
-      const date = lead.followUpDate;
+      // Convert followUpDate to string format for comparison
+      const date = typeof lead.followUpDate === 'string' 
+        ? lead.followUpDate 
+        : new Date(lead.followUpDate).toISOString().split('T')[0];
       if (date === todayStr) groups.today.push(lead);
       else if (date === tomorrowStr) groups.tomorrow.push(lead);
       else if (date < nextWeekStr) groups.thisWeek.push(lead);
@@ -76,54 +126,97 @@ export default function FollowUpsPage() {
     return groups;
   }, [filteredLeads]);
 
-  const markComplete = (lead: Lead) => {
-    updateLead(lead.id, { followUpDate: '' });
-    loadData();
+  const markComplete = async (lead: Lead) => {
+    try {
+      console.log('Marking lead complete:', lead.id, 'Current followUpDate:', lead.followUpDate);
+      await updateLead(lead.id, { followUpDate: '' });
+      console.log('Lead marked complete successfully');
+      await loadData();
+    } catch (error) {
+      console.error('Failed to mark complete:', error);
+      alert('Failed to mark complete. Please try again.');
+    }
   };
 
-  const skipToTomorrow = (lead: Lead) => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    updateLead(lead.id, { followUpDate: tomorrow.toISOString().split('T')[0] });
-    loadData();
+  const skipToTomorrow = async (lead: Lead) => {
+    try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      console.log('Skipping lead to tomorrow:', lead.id, 'New date:', tomorrowStr);
+      await updateLead(lead.id, { followUpDate: tomorrowStr });
+      console.log('Lead skipped to tomorrow successfully');
+      await loadData();
+    } catch (error) {
+      console.error('Failed to skip to tomorrow:', error);
+      alert('Failed to skip to tomorrow. Please try again.');
+    }
   };
 
-  const markAsLost = (lead: Lead) => {
-    updateLead(lead.id, { status: LeadStatus.CLOSED_LOST, followUpDate: '' });
-    loadData();
+  const markAsLost = async (lead: Lead) => {
+    try {
+      console.log('Marking lead as lost:', lead.id);
+      await updateLead(lead.id, { status: LeadStatus.CLOSED_LOST, followUpDate: '' });
+      console.log('Lead marked as lost successfully');
+      await loadData();
+    } catch (error) {
+      console.error('Failed to mark as lost:', error);
+      alert('Failed to mark as lost. Please try again.');
+    }
   };
 
-  const markAsWon = (lead: Lead) => {
-    updateLead(lead.id, { status: LeadStatus.CLOSED_WON, followUpDate: '' });
-    loadData();
+  const markAsWon = async (lead: Lead) => {
+    try {
+      console.log('Marking lead as won:', lead.id);
+      await updateLead(lead.id, { status: LeadStatus.CLOSED_WON, followUpDate: '' });
+      console.log('Lead marked as won successfully');
+      await loadData();
+    } catch (error) {
+      console.error('Failed to mark as won:', error);
+      alert('Failed to mark as won. Please try again.');
+    }
   };
 
-  const handleAddFromExisting = () => {
+  const handleAddFromExisting = async () => {
     if (!selectedLeadId || !formData.followUpDate) return;
-    updateLead(selectedLeadId, { followUpDate: formData.followUpDate });
-    setSelectedLeadId('');
-    setFormData({ name: '', contact: '', followUpDate: '' });
-    setShowAddModal(false);
-    loadData();
+    try {
+      console.log('Adding follow-up to existing lead:', selectedLeadId, 'Date:', formData.followUpDate);
+      await updateLead(selectedLeadId, { followUpDate: formData.followUpDate });
+      console.log('Follow-up added successfully');
+      setSelectedLeadId('');
+      setFormData({ name: '', contact: '', followUpDate: '' });
+      setShowAddModal(false);
+      await loadData();
+    } catch (error) {
+      console.error('Failed to add follow-up:', error);
+      alert('Failed to add follow-up. Please try again.');
+    }
   };
 
-  const handleAddLead = () => {
+  const handleAddLead = async () => {
     if (!formData.name.trim() || !formData.contact.trim()) return;
-    createLead({
-      name: formData.name,
-      contact: formData.contact,
-      source: 'Direct',
-      status: LeadStatus.NEW,
-      priority: Priority.MEDIUM,
-      followUpDate: formData.followUpDate || '',
-      lastMessage: '',
-      notes: '',
-      templatesUsed: [],
-      revenue: 0,
-    });
-    setFormData({ name: '', contact: '', followUpDate: '' });
-    setShowAddModal(false);
-    loadData();
+    try {
+      console.log('Creating new lead with follow-up:', formData);
+      await createLead({
+        name: formData.name,
+        contact: formData.contact,
+        source: 'Direct',
+        status: LeadStatus.NEW,
+        priority: Priority.MEDIUM,
+        followUpDate: formData.followUpDate || '',
+        lastMessage: '',
+        notes: '',
+        templatesUsed: [],
+        revenue: 0,
+      });
+      console.log('Lead created with follow-up successfully');
+      setFormData({ name: '', contact: '', followUpDate: '' });
+      setShowAddModal(false);
+      await loadData();
+    } catch (error) {
+      console.error('Failed to add lead:', error);
+      alert('Failed to add lead. Please try again.');
+    }
   };
 
   const isToday = (date: string) => date === new Date().toISOString().split('T')[0];

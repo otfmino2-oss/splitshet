@@ -3,7 +3,7 @@ import { z } from 'zod';
 // Authentication Validation
 export const signupSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters').min(8).regex(
+  password: z.string().min(8, 'Password must be at least 8 characters').regex(
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
     'Password must contain lowercase, uppercase, and number'
   ),
@@ -51,7 +51,7 @@ export const updateLeadSchema = createLeadSchema.partial();
 export const createExpenseSchema = z.object({
   type: z.string().min(1, 'Type is required'),
   amount: z.number().min(0, 'Amount must be positive'),
-  date: z.string().datetime(),
+  date: z.string().min(1, 'Date is required'),
   description: z.string().max(500).optional(),
 });
 

@@ -38,16 +38,29 @@ export default function ExpensesPage() {
     if (isAuthenticated) loadData();
   }, [isAuthenticated]);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!formData.amount || formData.amount <= 0) return;
-    createExpense(formData);
-    loadData();
-    setFormData({ type: ExpenseType.META_ADS, amount: 0, date: new Date().toISOString().split('T')[0], description: '' });
-    setShowAddModal(false);
+    try {
+      await createExpense(formData);
+      await loadData();
+      setFormData({ type: ExpenseType.META_ADS, amount: 0, date: new Date().toISOString().split('T')[0], description: '' });
+      setShowAddModal(false);
+    } catch (error) {
+      console.error('Failed to add expense:', error);
+      alert('Failed to add expense. Please try again.');
+    }
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('Delete this expense?')) { deleteExpense(id); loadData(); }
+  const handleDelete = async (id: string) => {
+    if (confirm('Delete this expense?')) {
+      try {
+        await deleteExpense(id);
+        await loadData();
+      } catch (error) {
+        console.error('Failed to delete expense:', error);
+        alert('Failed to delete expense. Please try again.');
+      }
+    }
   };
 
   const getTypeColor = (type: ExpenseType) => ({

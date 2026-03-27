@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { protectedRoute } from '@/lib/auth';
+import { logError } from '@/lib/errorHandler';
 
 export async function GET(request: NextRequest) {
   return protectedRoute(request, async (req, user) => {
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
         user: dbUser,
       });
     } catch (error) {
-      console.error('Get me error:', error);
+      logError('get_me', error, { userId: user.userId });
       return NextResponse.json(
         { error: 'Internal server error' },
         { status: 500 }

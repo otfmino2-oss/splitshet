@@ -99,13 +99,13 @@ model Template {
 model Activity {
   id            String   @id @default(cuid())
   userId        String
-  leadId        String
+  leadId        String?
   type          String
   description   String
   date          DateTime @default(now())
   createdAt     DateTime @default(now())
 
-  lead          Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  lead          Lead?     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])

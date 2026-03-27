@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { SubscriptionPlan } from '@/types/auth';
+import { parseRequestBody, apiErrorToResponse, ApiError, logError } from '@/lib/errorHandler';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,12 +15,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const { planId } = body;
+    // Safe JSON parsing
+    let body: unknown;
+    try {
+      body = await parseRequestBody(request);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return apiErrorToResponse(error);
+      }
+      return apiErrorToResponse(new ApiError('Invalid request format', 400));
+    }
+
+    // Type-safe extraction
+    if (typeof body !== 'object' || body === null || !('planId' in body)) {
+      return NextResponse.json(
+        { error: 'Plan ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const { planId } = body as { planId: unknown };
 
     // Validate plan
     const validPlans = Object.values(SubscriptionPlan);
-    if (!validPlans.includes(planId)) {
+    if (typeof planId !== 'string' || !validPlans.includes(planId as SubscriptionPlan)) {
       return NextResponse.json(
         { error: 'Invalid plan' },
         { status: 400 }
@@ -42,7 +61,7 @@ export async function POST(request: NextRequest) {
     const updatedUser = await prisma.user.update({
       where: { id: user.userId },
       data: {
-        plan: planId,
+        plan: planId as SubscriptionPlan,
         subscriptionStatus: 'active',
         subscriptionEndDate: subscriptionEndDate,
         updatedAt: new Date(),
@@ -58,10 +77,7 @@ export async function POST(request: NextRequest) {
       user: userWithoutPassword,
     });
   } catch (error) {
-    console.error('Subscription update error:', error);
-    return NextResponse.json(
-      { error: 'Failed to update subscription' },
-      { status: 500 }
-    );
+    logError('subscription_update_plan', error);
+    return apiErrorToResponse(error);
   }
 }

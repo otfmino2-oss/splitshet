@@ -58,21 +58,31 @@ export default function PipelinePage() {
     e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = (e: React.DragEvent, status: LeadStatus) => {
+  const handleDrop = async (e: React.DragEvent, status: LeadStatus) => {
     e.preventDefault();
     if (draggedLead && draggedLead.status !== status) {
-      updateLead(draggedLead.id, { status });
-      reload();
+      try {
+        await updateLead(draggedLead.id, { status });
+        await reload();
+      } catch (error) {
+        console.error('Failed to move lead:', error);
+        alert('Failed to move lead. Please try again.');
+      }
     }
     setDraggedLead(null);
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!formData.name || !formData.contact) return;
-    createLead({ ...formData, templatesUsed: [] });
-    reload();
-    setFormData({ name: '', contact: '', source: '', status: LeadStatus.NEW, priority: Priority.MEDIUM, followUpDate: '', lastMessage: '', notes: '', revenue: 0 });
-    setShowAddModal(false);
+    try {
+      await createLead({ ...formData, templatesUsed: [] });
+      await reload();
+      setFormData({ name: '', contact: '', source: '', status: LeadStatus.NEW, priority: Priority.MEDIUM, followUpDate: '', lastMessage: '', notes: '', revenue: 0 });
+      setShowAddModal(false);
+    } catch (error) {
+      console.error('Failed to add lead:', error);
+      alert('Failed to add lead. Please try again.');
+    }
   };
 
   const getPriorityColor = (priority: Priority) => ({

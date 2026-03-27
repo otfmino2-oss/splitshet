@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { LeadStatus, Priority, ExpenseType } from '@/types';
+import { logError, apiErrorToResponse } from '@/lib/errorHandler';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,15 +15,7 @@ export async function GET(request: NextRequest) {
     const [leads, expenses] = await Promise.all([
       prisma.lead.findMany({
         where: { userId: user.userId },
-        select: {
-          id: true,
-          status: true,
-          priority: true,
-          source: true,
-          revenue: true,
-          followUpDate: true,
-          createdAt: true,
-        },
+        orderBy: { createdAt: 'desc' },
       }),
       prisma.expense.findMany({
         where: { userId: user.userId },
@@ -54,45 +47,63 @@ export async function GET(request: NextRequest) {
     // Aggregate data in single pass
     let closedWonCount = 0;
     const sourceMap = new Map<string, { count: number; revenue: number }>();
-    const todayString = new Date().toISOString().split('T')[0];
+    const todayDate = new Date();
+    const todayString = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`;
     const todayFollowUps: typeof leads = [];
 
     leads.forEach(lead => {
-      // Status and priority counts
-      stats.byStatus[lead.status]++;
-      stats.byPriority[lead.priority]++;
+      // Status and priority counts - with safety checks
+      const status = lead.status || 'Unknown';
+      const priority = lead.priority || 'Medium';
+      
+      stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
+      stats.byPriority[priority] = (stats.byPriority[priority] || 0) + 1;
 
-      // Revenue
-      stats.totalRevenue += lead.revenue || 0;
+      // Revenue - with NaN check
+      const revenue = lead.revenue ?? 0;
+      if (typeof revenue === 'number' && !isNaN(revenue)) {
+        stats.totalRevenue += revenue;
+      }
 
       // Conversion rate
-      if (lead.status === LeadStatus.CLOSED_WON) closedWonCount++;
+      if (status === LeadStatus.CLOSED_WON) closedWonCount++;
 
       // Source analytics
       const source = lead.source || 'Unknown';
       const current = sourceMap.get(source) || { count: 0, revenue: 0 };
       sourceMap.set(source, {
         count: current.count + 1,
-        revenue: current.revenue + (lead.revenue || 0),
+        revenue: current.revenue + (revenue || 0),
       });
 
-      // Today's follow-ups (check date without full DateTime parsing)
+      // Today's follow-ups
       if (lead.followUpDate) {
-        const followUpDateStr = lead.followUpDate.toISOString().split('T')[0];
-        if (followUpDateStr === todayString) {
-          todayFollowUps.push(lead);
+        try {
+          const followUpDateObj = lead.followUpDate instanceof Date ? lead.followUpDate : new Date(lead.followUpDate);
+          if (!isNaN(followUpDateObj.getTime())) {
+            const followUpDateStr = `${followUpDateObj.getFullYear()}-${String(followUpDateObj.getMonth() + 1).padStart(2, '0')}-${String(followUpDateObj.getDate()).padStart(2, '0')}`;
+            if (followUpDateStr === todayString) {
+              todayFollowUps.push(lead);
+            }
+          }
+        } catch (e) {
+          logError('dashboard_parse_date', e, { leadId: lead.id });
         }
       }
     });
 
     stats.conversionRate = stats.total > 0 ? (closedWonCount / stats.total) * 100 : 0;
 
-    // Calculate financial summary
-    const totalExpenses = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    // Calculate financial summary with safety checks
+    const totalExpenses = expenses.reduce((sum, expense) => {
+      const amount = expense.amount ?? 0;
+      return sum + (typeof amount === 'number' ? amount : 0);
+    }, 0);
+    
     const profit = stats.totalRevenue - totalExpenses;
     const adsExpenses = expenses
       .filter(e => e.type === ExpenseType.META_ADS)
-      .reduce((sum, e) => sum + e.amount, 0);
+      .reduce((sum, e) => sum + (e.amount ?? 0), 0);
     const roiFromAds = adsExpenses === 0 ? 0 : ((stats.totalRevenue - adsExpenses) / adsExpenses) * 100;
 
     // Format source analytics
@@ -107,7 +118,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       {
-        stats: { ...stats, leads },
+        leads,
+        stats: {
+          total: stats.total,
+          byStatus: stats.byStatus,
+          byPriority: stats.byPriority,
+          totalRevenue: stats.totalRevenue,
+          conversionRate: stats.conversionRate,
+        },
         todayFollowUps,
         financial: {
           totalRevenue: stats.totalRevenue,
@@ -124,10 +142,7 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    console.error('Dashboard summary error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    logError('dashboard_summary', error);
+    return apiErrorToResponse(error);
   }
 }

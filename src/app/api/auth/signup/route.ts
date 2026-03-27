@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { signupSchema } from '@/lib/validations';
 import { signToken, signRefreshToken } from '@/lib/jwt';
 import { authRateLimiter, getClientIp, rateLimitResponse } from '@/lib/rateLimit';
-import { z } from 'zod';
+import { parseRequestBody, apiErrorToResponse, ApiError, logError } from '@/lib/errorHandler';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,8 +14,17 @@ export async function POST(request: NextRequest) {
       return rateLimitResponse();
     }
 
-    // Parse and validate input
-    const body = await request.json();
+    // Parse and validate input with improved error handling
+    let body: unknown;
+    try {
+      body = await parseRequestBody(request);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return apiErrorToResponse(error);
+      }
+      return apiErrorToResponse(new ApiError('Invalid request format', 400));
+    }
+
     const validationResult = signupSchema.safeParse(body);
 
     if (!validationResult.success) {
@@ -71,40 +80,42 @@ export async function POST(request: NextRequest) {
     const refreshToken = signRefreshToken(user.id);
 
     // Store refresh token in database
-    await prisma.refreshToken.create({
-      data: {
-        token: refreshToken,
-        userId: user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-      },
-    });
+    try {
+      await prisma.refreshToken.create({
+        data: {
+          token: refreshToken,
+          userId: user.id,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        },
+      });
+    } catch (error: unknown) {
+      logError('signup_refresh_token_creation', error, { userId: user.id });
+      // Still continue - tokens will work even if DB storage failed
+    }
 
-    // Return success response with tokens (secure cookie should be set by client or middleware)
-    return NextResponse.json(
+    // Return success response with tokens
+    const response = NextResponse.json(
       {
         success: true,
         user,
         accessToken,
         refreshToken,
       },
-      {
-        status: 201,
-        headers: {
-          'Set-Cookie': `refreshToken=${refreshToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${7 * 24 * 60 * 60}`,
-        },
-      }
+      { status: 201 }
     );
+
+    // Set refresh token cookie securely
+    response.cookies.set('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+    });
+
+    return response;
   } catch (error) {
-    console.error('Signup error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-    console.error('Error details:', errorMessage);
-    
-    return NextResponse.json(
-      { 
-        error: 'Internal server error',
-        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
-      },
-      { status: 500 }
-    );
+    logError('signup_route', error);
+    return apiErrorToResponse(error);
   }
 }

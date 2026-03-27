@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lead, LeadStatus, Priority, SourceAnalytics } from '@/types';
-import { getDashboardData, createLead, updateLead, deleteLead, invalidateCache } from '@/lib/dataService';
+import { getAllLeads, createLead, updateLead, deleteLead, getFinancialSummary, getTodayFollowUps, getSourceAnalytics, invalidateCache } from '@/lib/dataService';
 import { useAuth } from '@/lib/authContext';
 import { Header } from '@/components/Header';
 
@@ -29,11 +29,16 @@ export default function Dashboard() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const dashboardData = await getDashboardData();
-      setLeads(dashboardData.stats.leads || []);
-      setFinancial(dashboardData.financial);
-      setTodayFollowUps(dashboardData.todayFollowUps);
-      setSourceData(dashboardData.sourceAnalytics);
+      const [leadsData, financialData, followUpsData, sourceDataResult] = await Promise.all([
+        getAllLeads(),
+        getFinancialSummary(),
+        getTodayFollowUps(),
+        getSourceAnalytics(),
+      ]);
+      setLeads(leadsData);
+      setFinancial(financialData);
+      setTodayFollowUps(followUpsData);
+      setSourceData(sourceDataResult);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {

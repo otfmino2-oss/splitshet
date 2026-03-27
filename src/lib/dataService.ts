@@ -1,4 +1,5 @@
 import { Lead, Expense, Template, LeadStatus, Priority, ExpenseType, Activity, ActivityType, Task, TaskStatus, SourceAnalytics, ForecastData } from '@/types';
+import { getValidAccessToken, resetRefreshPromise } from '@/lib/tokenManager';
 
 // ========================
 // API BASE URL
@@ -15,7 +16,8 @@ const getAuthToken = (): string | null => {
   try {
     const token = localStorage.getItem('accessToken');
     return token;
-  } catch {
+  } catch (error) {
+    console.error('Failed to get auth token:', error);
     return null;
   }
 };
@@ -25,7 +27,8 @@ const getRefreshToken = (): string | null => {
   try {
     const token = localStorage.getItem('refreshToken');
     return token;
-  } catch {
+  } catch (error) {
+    console.error('Failed to get refresh token:', error);
     return null;
   }
 };
@@ -33,7 +36,10 @@ const getRefreshToken = (): string | null => {
 const refreshAccessToken = async (): Promise<string | null> => {
   try {
     const refreshToken = getRefreshToken();
-    if (!refreshToken) return null;
+    if (!refreshToken) {
+      resetRefreshPromise();
+      return null;
+    }
 
     const response = await fetch(`${API_BASE}/api/auth/refresh`, {
       method: 'POST',
@@ -45,6 +51,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
       // Clear tokens on failure
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
+      resetRefreshPromise();
       return null;
     }
 
@@ -52,51 +59,51 @@ const refreshAccessToken = async (): Promise<string | null> => {
     localStorage.setItem('accessToken', data.accessToken);
     localStorage.setItem('refreshToken', data.refreshToken);
     return data.accessToken;
-  } catch {
+  } catch (error) {
+    console.error('Token refresh failed:', error);
     // Clear tokens on error
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    resetRefreshPromise();
     return null;
   }
 };
 
 const apiRequest = async (endpoint: string, options: RequestInit = {}, retryCount = 0) => {
-  const token = getAuthToken();
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` }),
-  };
+  try {
+    // Get valid token (handles refresh if needed)
+    const token = await getValidAccessToken(getAuthToken, getRefreshToken, refreshAccessToken);
+    
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: { ...headers, ...options.headers },
-  });
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers: { ...headers, ...options.headers },
+    });
 
-  if (!response.ok) {
-    // If unauthorized and we haven't retried yet, try to refresh token
-    if (response.status === 401 && retryCount === 0) {
-      const newToken = await refreshAccessToken();
-      if (newToken) {
-        // Retry the request with the new token
-        const newHeaders: HeadersInit = {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${newToken}`,
-        };
-        const retryResponse = await fetch(`${API_BASE}${endpoint}`, {
-          ...options,
-          headers: { ...newHeaders, ...options.headers },
-        });
-        if (retryResponse.ok) {
-          return retryResponse.json();
-        }
+    if (!response.ok) {
+      // If unauthorized after having a token, log out
+      if (response.status === 401 && retryCount === 0) {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        resetRefreshPromise();
+        
+        // Retry once with potential new token
+        return apiRequest(endpoint, options, retryCount + 1);
       }
+
+      const errorData = await response.json().catch(() => ({ error: 'Network error' }));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
     }
 
-    const error = await response.json().catch(() => ({ error: 'Network error' }));
-    throw new Error(error.error || `HTTP ${response.status}`);
+    return response.json();
+  } catch (error) {
+    console.error(`API request failed for ${endpoint}:`, error);
+    throw error;
   }
-
-  return response.json();
 };
 
 // ========================
@@ -208,22 +215,6 @@ export const getAllLeads = async (useCache = true): Promise<Lead[]> => {
   }
 };
 
-export const getDashboardData = async () => {
-  try {
-    return await getCached('dashboard', () => apiRequest('/api/dashboard/summary'), 60000);
-  } catch (error) {
-    console.error('Failed to fetch dashboard data:', error);
-    // Fallback to local calculations
-    const leads = getAllLeadsLocal();
-    return {
-      stats: { total: leads.length, byStatus: {}, byPriority: {} },
-      todayFollowUps: [],
-      financial: { totalRevenue: 0, totalExpenses: 0, profit: 0, roiFromAds: 0 },
-      sourceAnalytics: [],
-    };
-  }
-};
-
 export const getLeadsFiltered = async (filters: {
   status?: LeadStatus;
   priority?: Priority;
@@ -322,27 +313,33 @@ export const createLead = async (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedA
       ...lead,
       followUpDate: lead.followUpDate ? lead.followUpDate : undefined,
     };
+    console.log('Creating lead with data:', payload);
 
     const newLead = await apiRequest('/api/leads', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    console.log('Lead created successfully:', newLead);
     return newLead;
   } catch (error) {
     console.error('Failed to create lead:', error);
+    console.error('Error details:', error instanceof Error ? error.message : String(error));
     throw new Error(error instanceof Error ? error.message : 'Failed to save lead to database. Please check your connection and try again.');
   }
 };
 
 export const updateLead = async (id: string, updates: Partial<Lead>): Promise<Lead | null> => {
   try {
+    console.log('Updating lead:', id, 'with data:', updates);
     const updatedLead = await apiRequest(`/api/leads/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
+    console.log('Lead updated successfully:', updatedLead);
     return updatedLead;
   } catch (error) {
     console.error('Failed to update lead:', error);
+    console.error('Error details:', error instanceof Error ? error.message : String(error));
     // Don't fallback to localStorage - throw error so user knows data wasn't saved
     throw new Error('Failed to update lead in database. Please check your connection and try again.');
   }
@@ -418,9 +415,20 @@ export const getLeadsByPriority = async (priority: Priority): Promise<Lead[]> =>
 
 export const getTodayFollowUps = async (): Promise<Lead[]> => {
   try {
-    // Use getDashboardData which includes today's follow-ups optimized server-side
-    const dashboardData = await getDashboardData();
-    return dashboardData.todayFollowUps;
+    const leads = await getAllLeads();
+    const today = new Date().toISOString().split('T')[0];
+    return leads.filter((lead) => {
+      if (!lead.followUpDate) return false;
+      try {
+        // followUpDate is either YYYY-MM-DD string or ISO datetime string
+        const dateStr = typeof lead.followUpDate === 'string' && lead.followUpDate.includes('T')
+          ? lead.followUpDate.split('T')[0]
+          : lead.followUpDate;
+        return dateStr === today;
+      } catch {
+        return false;
+      }
+    });
   } catch (error) {
     console.error('Failed to get today follow-ups:', error);
     return getTodayFollowUpsLocal();
@@ -592,22 +600,28 @@ export const deleteTask = (id: string): boolean => {
 
 export const getAllExpenses = async (): Promise<Expense[]> => {
   try {
-    return await apiRequest('/api/expenses');
+    const expenses = await apiRequest('/api/expenses');
+    console.log('Fetched expenses from API:', expenses);
+    return expenses;
   } catch (error) {
-    console.error('Failed to fetch expenses:', error);
+    console.error('Failed to fetch expenses from API:', error);
+    console.log('Falling back to localStorage');
     return getAllExpensesLocal();
   }
 };
 
 export const createExpense = async (expense: Omit<Expense, 'id' | 'createdAt'>): Promise<Expense> => {
   try {
+    console.log('Creating expense with data:', expense);
     const newExpense = await apiRequest('/api/expenses', {
       method: 'POST',
       body: JSON.stringify(expense),
     });
+    console.log('Expense created successfully:', newExpense);
     return newExpense;
   } catch (error) {
     console.error('Failed to create expense:', error);
+    console.error('Error details:', error instanceof Error ? error.message : String(error));
     return createExpenseLocal(expense);
   }
 };
@@ -634,10 +648,19 @@ export const getExpensesByType = async (type: ExpenseType): Promise<Expense[]> =
 
 export const deleteExpense = async (id: string): Promise<boolean> => {
   try {
-    // Note: We don't have a DELETE endpoint for expenses yet, so this will fail
-    // For now, we'll just return false to indicate failure
-    console.warn('Delete expense API not implemented yet');
-    return false;
+    const response = await fetch(`/api/expenses/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Failed to delete expense:', response.statusText);
+      return deleteExpenseLocal(id);
+    }
+
+    return true;
   } catch (error) {
     console.error('Failed to delete expense:', error);
     return deleteExpenseLocal(id);
@@ -720,13 +743,7 @@ export const deleteTemplate = (id: string): boolean => {
 // ========================
 
 export const getSourceAnalytics = async (): Promise<SourceAnalytics[]> => {
-  try {
-    const dashboardData = await getDashboardData();
-    return dashboardData.sourceAnalytics;
-  } catch (error) {
-    console.error('Failed to get source analytics:', error);
-    return getSourceAnalyticsLocal();
-  }
+  return getSourceAnalyticsLocal();
 };
 
 // Legacy local function
@@ -809,8 +826,30 @@ export const calculateROI = async (): Promise<number> => {
 
 export const getFinancialSummary = async () => {
   try {
-    const dashboardData = await getDashboardData();
-    return dashboardData.financial;
+    const [leads, expenses] = await Promise.all([
+      getAllLeads(),
+      getAllExpenses(),
+    ]);
+    
+    const totalRevenue = leads
+      .filter(l => l.status === LeadStatus.CLOSED_WON && l.revenue)
+      .reduce((sum, l) => sum + (l.revenue || 0), 0);
+    
+    const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const profit = totalRevenue - totalExpenses;
+    
+    const adExpenses = expenses
+      .filter(e => e.type === ExpenseType.META_ADS)
+      .reduce((sum, e) => sum + (e.amount || 0), 0);
+    
+    const roiFromAds = adExpenses > 0 ? Math.round(((totalRevenue - totalExpenses) / adExpenses) * 100) : 0;
+    
+    return {
+      totalRevenue,
+      totalExpenses,
+      profit,
+      roiFromAds,
+    };
   } catch (error) {
     console.error('Failed to get financial summary:', error);
     // Fallback to local calculations

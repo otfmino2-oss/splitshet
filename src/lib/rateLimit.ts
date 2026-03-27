@@ -8,6 +8,37 @@ interface RateLimitStore {
 }
 
 const rateLimitStore: RateLimitStore = {};
+let cleanupTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Clean up expired rate limit entries to prevent memory leak
+ */
+function cleanupExpiredEntries(): void {
+  const now = Date.now();
+  let cleaned = 0;
+
+  for (const key in rateLimitStore) {
+    if (rateLimitStore[key].resetTime < now) {
+      delete rateLimitStore[key];
+      cleaned++;
+    }
+  }
+
+  // Clean up every hour
+  if (cleaned > 0) {
+    console.log(`Rate limit cleanup: removed ${cleaned} expired entries`);
+  }
+}
+
+/**
+ * Schedule periodic cleanup
+ */
+function ensureCleanupScheduled(): void {
+  if (!cleanupTimer) {
+    cleanupTimer = setInterval(cleanupExpiredEntries, 60 * 60 * 1000); // 1 hour
+    cleanupTimer.unref(); // Don't keep process alive
+  }
+}
 
 /**
  * Simple rate limiter for API routes
@@ -17,6 +48,8 @@ export function createRateLimiter(
   windowMs: number = 15 * 60 * 1000, // 15 minutes
   maxRequests: number = 100
 ) {
+  ensureCleanupScheduled();
+
   return function rateLimit(key: string): boolean {
     const now = Date.now();
 

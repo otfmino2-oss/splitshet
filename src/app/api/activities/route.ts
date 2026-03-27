@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAuthUserFromRequest } from '@/lib/auth';
+import { parseRequestBody, apiErrorToResponse, logError, ApiError } from '@/lib/errorHandler';
+import { sanitizeString } from '@/lib/paramParsing';
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,11 +26,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(activities);
   } catch (error) {
-    console.error('Get activities error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    logError('get_activities', error);
+    return apiErrorToResponse(error);
   }
 }
 
@@ -39,22 +38,57 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { leadId, type, description } = body;
+    // Safe JSON parsing
+    let body: unknown;
+    try {
+      body = await parseRequestBody(request);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return apiErrorToResponse(error);
+      }
+      return apiErrorToResponse(new ApiError('Invalid request format', 400));
+    }
 
-    if (!type || !description) {
+    // Type-safe extraction
+    if (typeof body !== 'object' || body === null) {
+      return NextResponse.json(
+        { error: 'Invalid request format' },
+        { status: 400 }
+      );
+    }
+
+    const { leadId, type, description } = body as Record<string, unknown>;
+
+    if (typeof type !== 'string' || typeof description !== 'string') {
       return NextResponse.json(
         { error: 'Type and description are required' },
         { status: 400 }
       );
     }
 
+    // Validate inputs
+    const sanitizedType = sanitizeString(type, 50);
+    const sanitizedDescription = sanitizeString(description, 5000);
+
+    if (!sanitizedType || !sanitizedDescription) {
+      return NextResponse.json(
+        { error: 'Type and description cannot be empty' },
+        { status: 400 }
+      );
+    }
+
+    let leadIdValue: string | undefined;
+    if (typeof leadId === 'string') {
+      const sanitizedLeadId = sanitizeString(leadId, 100);
+      leadIdValue = sanitizedLeadId || undefined;
+    }
+
     const activity = await prisma.activity.create({
       data: {
         userId: user.userId,
-        leadId: leadId || null,
-        type,
-        description,
+        leadId: leadIdValue,
+        type: sanitizedType,
+        description: sanitizedDescription,
       },
       include: {
         lead: {
@@ -68,10 +102,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(activity, { status: 201 });
   } catch (error) {
-    console.error('Create activity error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    logError('create_activity', error);
+    return apiErrorToResponse(error);
   }
 }

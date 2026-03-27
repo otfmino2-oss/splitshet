@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { protectedRoute } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { parseRequestBody, apiErrorToResponse, ApiError, logError } from '@/lib/errorHandler';
+import { sanitizeString } from '@/lib/paramParsing';
 
 const nvidiaClient = new OpenAI({
   apiKey: process.env.NVIDIA_API_KEY || '',
@@ -57,36 +59,53 @@ export async function POST(request: NextRequest) {
       }
 
       if (!process.env.NVIDIA_API_KEY) {
-        console.error('NVIDIA_API_KEY not configured');
+        logError('ai_chat_no_api_key', new Error('NVIDIA_API_KEY not configured'));
         return NextResponse.json(
           { error: 'AI service unavailable' },
           { status: 503 }
         );
       }
 
-      const body: ChatRequest = await req.json();
+      // Safe JSON parsing
+      let body: ChatRequest;
+      try {
+        body = await parseRequestBody(req) as ChatRequest;
+      } catch (error) {
+        if (error instanceof ApiError) {
+          return apiErrorToResponse(error);
+        }
+        return apiErrorToResponse(new ApiError('Invalid request format', 400));
+      }
+
       const { messages, context } = body;
 
-      if (!messages || messages.length === 0) {
+      // Validate messages
+      if (!Array.isArray(messages) || messages.length === 0) {
         return NextResponse.json(
           { error: 'Messages are required' },
           { status: 400 }
         );
       }
 
+      // Sanitize messages
+      const sanitizedMessages = messages.map(m => ({
+        role: m.role,
+        content: sanitizeString(m.content, 5000),
+      }));
+
       const contextPrompt = context ? `
 USER CRM CONTEXT:
-- Total Leads: ${context.totalLeads || 0}
-- Total Revenue: $${context.totalRevenue || 0}
-- Pending Follow-ups: ${context.pendingFollowUps || 0}
-${context.recentActivities?.length ? `- Recent Activities: ${context.recentActivities.join(', ')}` : ''}
+- Total Leads: ${typeof context.totalLeads === 'number' ? context.totalLeads : 0}
+- Total Revenue: $${typeof context.totalRevenue === 'number' ? context.totalRevenue : 0}
+- Pending Follow-ups: ${typeof context.pendingFollowUps === 'number' ? context.pendingFollowUps : 0}
+${Array.isArray(context.recentActivities) && context.recentActivities.length ? `- Recent Activities: ${context.recentActivities.slice(0, 5).map(a => sanitizeString(String(a), 100)).join(', ')}` : ''}
 
 Use this context to provide personalized advice.
 ` : '';
 
       const formattedMessages = [
         { role: 'system' as const, content: systemPrompt + contextPrompt },
-        ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+        ...sanitizedMessages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
       ];
 
       const completion = await nvidiaClient.chat.completions.create({
@@ -106,11 +125,8 @@ Use this context to provide personalized advice.
         message: response.trim(),
       });
     } catch (error) {
-      console.error('AI Chat API Error:', error);
-      return NextResponse.json(
-        { error: 'Failed to generate response' },
-        { status: 500 }
-      );
+      logError('ai_chat_api', error, { userId: user.userId });
+      return apiErrorToResponse(new ApiError('Failed to generate response', 500));
     }
   });
 }
