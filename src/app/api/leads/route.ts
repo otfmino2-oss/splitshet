@@ -10,8 +10,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const validationResult = createLeadSchema.safeParse(body);
+    const rawBody = await request.json();
+    if (rawBody.followUpDate === '') {
+      delete rawBody.followUpDate;
+    }
+
+    const validationResult = createLeadSchema.safeParse(rawBody);
 
     if (!validationResult.success) {
       return NextResponse.json(
@@ -61,6 +65,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const priority = searchParams.get('priority');
     const source = searchParams.get('source');
+    const limit = searchParams.get('limit');
+    const offset = searchParams.get('offset');
 
     const where: any = { userId: user.userId };
 
@@ -68,8 +74,13 @@ export async function GET(request: NextRequest) {
     if (priority) where.priority = priority;
     if (source) where.source = source;
 
+    const take = limit ? parseInt(limit) : undefined;
+    const skip = offset ? parseInt(offset) : undefined;
+
     const leads = await prisma.lead.findMany({
       where,
+      take,
+      skip,
       orderBy: { createdAt: 'desc' },
     });
 

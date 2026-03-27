@@ -90,7 +90,11 @@ export default function Dashboard() {
 
     try {
       setLoading(true);
-      await createLead({ ...formData, templatesUsed: [] });
+      await createLead({
+        ...formData,
+        templatesUsed: [],
+        followUpDate: formData.followUpDate?.trim() ?? '',
+      });
       await loadData();
       resetForm();
       setShowAddModal(false);
@@ -107,13 +111,16 @@ export default function Dashboard() {
 
     try {
       setLoading(true);
-      await updateLead(editingLead.id, formData);
+      await updateLead(editingLead.id, {
+        ...formData,
+        followUpDate: formData.followUpDate?.trim() ?? '',
+      });
       await loadData();
       setEditingLead(null);
       resetForm();
     } catch (error) {
       console.error('Failed to update lead:', error);
-      alert('Failed to update lead. Please try again.');
+      alert(error instanceof Error ? error.message : 'Failed to update lead. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -135,7 +142,22 @@ export default function Dashboard() {
   };
 
   const openEdit = (lead: Lead) => {
-    setFormData({ name: lead.name, contact: lead.contact, source: lead.source, status: lead.status, priority: lead.priority, followUpDate: lead.followUpDate, lastMessage: lead.lastMessage, notes: lead.notes, revenue: lead.revenue });
+    // Convert followUpDate from ISO string to YYYY-MM-DD format for date input
+    const followUpDateValue = lead.followUpDate
+      ? new Date(lead.followUpDate).toISOString().split('T')[0]
+      : '';
+
+    setFormData({
+      name: lead.name,
+      contact: lead.contact,
+      source: lead.source,
+      status: lead.status,
+      priority: lead.priority,
+      followUpDate: followUpDateValue,
+      lastMessage: lead.lastMessage,
+      notes: lead.notes,
+      revenue: lead.revenue
+    });
     setEditingLead(lead);
   };
 

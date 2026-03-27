@@ -18,6 +18,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <meta name="cryptomus" content="02b49358" />ver
         <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23A855F7'/><path d='M30 70V35l20 20 20-20v35' stroke='white' stroke-width='8' fill='none'/></svg>" />
       </head>
       <body className="min-h-full flex flex-col bg-[#0A0A0F] text-[#E4E4E7] antialiased" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>

@@ -28,9 +28,9 @@ export default function FollowUpsPage() {
     if (!isLoading && !isAuthenticated) router.push('/login');
   }, [isAuthenticated, isLoading, router]);
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback(async () => {
     if (isAuthenticated) {
-      const all = getAllLeads();
+      const all = await getAllLeads();
       setAllLeads(all);
       const today = new Date().toISOString().split('T')[0];
       const upcoming = all.filter(l => l.followUpDate && l.followUpDate >= today);

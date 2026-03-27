@@ -3,18 +3,55 @@ import { prisma } from '@/lib/prisma';
 import { updateLeadSchema } from '@/lib/validations';
 import { getAuthUserFromRequest } from '@/lib/auth';
 
-export async function PUT(
+export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const user = getAuthUserFromRequest(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const validationResult = updateLeadSchema.safeParse(body);
+    const lead = await prisma.lead.findFirst({
+      where: {
+        id: id,
+        userId: user.userId,
+      },
+    });
+
+    if (!lead) {
+      return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(lead);
+  } catch (error) {
+    console.error('Get lead error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const user = getAuthUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const rawBody = await request.json();
+    if (rawBody.followUpDate === '') {
+      delete rawBody.followUpDate;
+    }
+
+    const validationResult = updateLeadSchema.safeParse(rawBody);
 
     if (!validationResult.success) {
       return NextResponse.json(
@@ -30,7 +67,7 @@ export async function PUT(
 
     const lead = await prisma.lead.updateMany({
       where: {
-        id: params.id,
+        id: id,
         userId: user.userId,
       },
       data: {
@@ -54,7 +91,7 @@ export async function PUT(
     // Get the updated lead
     const updatedLead = await prisma.lead.findFirst({
       where: {
-        id: params.id,
+        id: id,
         userId: user.userId,
       },
     });
@@ -71,9 +108,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const user = getAuthUserFromRequest(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -81,7 +119,7 @@ export async function DELETE(
 
     const lead = await prisma.lead.deleteMany({
       where: {
-        id: params.id,
+        id: id,
         userId: user.userId,
       },
     });

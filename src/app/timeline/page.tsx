@@ -42,20 +42,21 @@ export default function TimelinePage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      setLeads(getAllLeads());
+      getAllLeads().then(setLeads);
       if (selectedLead) {
-        setActivities(getActivitiesByLeadId(selectedLead.id));
+        getActivitiesByLeadId(selectedLead.id).then(setActivities);
       }
     }
   }, [isAuthenticated, selectedLead]);
 
-  const handleAddActivity = (description?: string, type?: string) => {
+  const handleAddActivity = async (description?: string, type?: string) => {
     if (!selectedLead) return;
     const desc = description || newActivity.description;
     const actType = type ? (type as ActivityType) : newActivity.type;
     if (!desc.trim()) return;
-    addActivity(selectedLead.id, actType, desc);
-    setActivities(getActivitiesByLeadId(selectedLead.id));
+    await addActivity(selectedLead.id, actType, desc);
+    const activities = await getActivitiesByLeadId(selectedLead.id);
+    setActivities(activities);
     setNewActivity({ type: ActivityType.NOTE, description: '' });
     setShowAddModal(false);
   };

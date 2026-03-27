@@ -27,9 +27,11 @@ export default function ExpensesPage() {
     if (!isLoading && !isAuthenticated) router.push('/login');
   }, [isAuthenticated, isLoading, router]);
 
-  const loadData = () => {
-    setExpenses(getAllExpenses());
-    setFinancial(getFinancialSummary());
+  const loadData = async () => {
+    const expenses = await getAllExpenses();
+    const financial = await getFinancialSummary();
+    setExpenses(expenses);
+    setFinancial(financial);
   };
 
   useEffect(() => {

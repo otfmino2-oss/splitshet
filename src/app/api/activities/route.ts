@@ -75,39 +75,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
-export async function POST(request: NextRequest) {
-  try {
-    const user = await authMiddleware(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const { leadId, type, description } = body;
-
-    if (!type || !description) {
-      return NextResponse.json(
-        { error: 'Type and description are required' },
-        { status: 400 }
-      );
-    }
-
-    const activity = await prisma.activity.create({
-      data: {
-        userId: user.id,
-        leadId: leadId || null,
-        type,
-        description,
-      },
-    });
-
-    return NextResponse.json(activity, { status: 201 });
-  } catch (error) {
-    console.error('Create activity error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}

@@ -24,27 +24,30 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      const sources = getSourceAnalytics();
-      const forecast = getRevenueForecast();
-      const fin = getFinancialSummary();
-      const allLeads = getAllLeads();
-      const closedWonLeads = allLeads.filter(l => l.status === LeadStatus.CLOSED_WON);
-      const closedLostLeads = allLeads.filter(l => l.status === LeadStatus.CLOSED_LOST);
-      const totalRevenue = closedWonLeads.reduce((sum, l) => sum + (l.revenue || 0), 0);
+      const loadData = async () => {
+        const sources = await getSourceAnalytics();
+        const forecast = await getRevenueForecast();
+        const fin = await getFinancialSummary();
+        const allLeads = await getAllLeads();
+        const closedWonLeads = allLeads.filter(l => l.status === LeadStatus.CLOSED_WON);
+        const closedLostLeads = allLeads.filter(l => l.status === LeadStatus.CLOSED_LOST);
+        const totalRevenue = closedWonLeads.reduce((sum, l) => sum + (l.revenue || 0), 0);
 
-      setSourceData(sources);
-      setForecastData(forecast);
-      setFinancial(fin);
-      setLeads({
-        total: allLeads.length,
-        closed: closedWonLeads.length,
-        lost: closedLostLeads.length,
-        newCount: allLeads.filter(l => l.status === LeadStatus.NEW).length,
-        contacted: allLeads.filter(l => l.status === LeadStatus.CONTACTED).length,
-        interested: allLeads.filter(l => l.status === LeadStatus.INTERESTED).length,
-        avgDeal: closedWonLeads.length > 0 ? Math.round(totalRevenue / closedWonLeads.length) : 0,
-        conversionRate: allLeads.length > 0 ? Math.round((closedWonLeads.length / allLeads.length) * 100) : 0,
-      });
+        setSourceData(sources);
+        setForecastData(forecast);
+        setFinancial(fin);
+        setLeads({
+          total: allLeads.length,
+          closed: closedWonLeads.length,
+          lost: closedLostLeads.length,
+          newCount: allLeads.filter(l => l.status === LeadStatus.NEW).length,
+          contacted: allLeads.filter(l => l.status === LeadStatus.CONTACTED).length,
+          interested: allLeads.filter(l => l.status === LeadStatus.INTERESTED).length,
+          avgDeal: closedWonLeads.length > 0 ? Math.round(totalRevenue / closedWonLeads.length) : 0,
+          conversionRate: allLeads.length > 0 ? Math.round((closedWonLeads.length / allLeads.length) * 100) : 0,
+        });
+      };
+      loadData();
     }
   }, [isAuthenticated]);
 

@@ -35,11 +35,14 @@ export default function TasksPage() {
   useEffect(() => {
     if (isAuthenticated) {
       setTasks(getAllTasks());
-      setLeads(getAllLeads());
+      getAllLeads().then(setLeads);
     }
   }, [isAuthenticated]);
 
-  const reload = useCallback(() => setTasks(getAllTasks()), []);
+  const reload = useCallback(async () => {
+    const tasks = await getAllTasks();
+    setTasks(tasks);
+  }, []);
 
   const resetForm = () => {
     setFormData({ title: '', description: '', status: TaskStatus.TODO, priority: Priority.MEDIUM, dueDate: '', leadId: '' });

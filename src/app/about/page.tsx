@@ -13,41 +13,41 @@ export default function AboutPage() {
   const { isAuthenticated } = useAuth();
 
   const team = [
-    { name: 'Alex Chen', role: 'Founder & CEO', bio: 'Former freelancer turned SaaS builder. Built SplitSheet to solve his own CRM frustrations after years of using spreadsheets and sticky notes.', avatar: 'AC', linkedin: '#' },
-    { name: 'Maria Santos', role: 'Head of Design', bio: 'Design systems expert with 12+ years creating intuitive interfaces. Previously at Figma and Stripe. Passionate about making complex tools simple.', avatar: 'MS', linkedin: '#' },
-    { name: 'David Kim', role: 'Lead Engineer', bio: 'Full-stack developer passionate about performance and developer experience. Built scalable systems at multiple startups before joining SplitSheet.', avatar: 'DK', linkedin: '#' },
-    { name: 'Sarah Johnson', role: 'Head of Customer Success', bio: 'Customer advocate with 8+ years in SaaS. Former agency owner who understands the daily challenges freelancers face.', avatar: 'SJ', linkedin: '#' },
-    { name: 'James Rivera', role: 'AI/ML Engineer', bio: 'Machine learning specialist focused on making AI practical for small businesses. PhD from Stanford, now making AI accessible to everyone.', avatar: 'JR', linkedin: '#' },
-    { name: 'Emily Zhang', role: 'Head of Marketing', bio: 'Growth marketer with a background in freelance consulting. Knows what resonates with freelancers because she is one.', avatar: 'EZ', linkedin: '#' },
+    { name: 'Alex Chen', role: 'Founder & CEO', bio: 'Former freelancer turned SaaS builder. Built our CRM to solve agency and real estate management challenges after seeing too many teams struggle with spreadsheets.', avatar: 'AC', linkedin: '#' },
+    { name: 'Maria Santos', role: 'Head of Design', bio: 'Design systems expert with 12+ years creating intuitive interfaces. Previously at Figma and Stripe. Passionate about making complex tools simple for busy professionals.', avatar: 'MS', linkedin: '#' },
+    { name: 'David Kim', role: 'Lead Engineer', bio: 'Full-stack developer passionate about performance and developer experience. Built scalable systems for agencies and real estate teams before joining.', avatar: 'DK', linkedin: '#' },
+    { name: 'Sarah Johnson', role: 'Head of Customer Success', bio: 'Customer advocate with 8+ years in SaaS. Former agency owner and real estate team lead who understands scaling challenges.', avatar: 'SJ', linkedin: '#' },
+    { name: 'James Rivera', role: 'AI/ML Engineer', bio: 'Machine learning specialist focused on making AI practical for agencies and real estate. PhD from Stanford, now making AI accessible to service businesses.', avatar: 'JR', linkedin: '#' },
+    { name: 'Emily Zhang', role: 'Head of Marketing', bio: 'Growth marketer with a background in agency consulting. Knows what resonates with agencies and real estate professionals because she works with them daily.', avatar: 'EZ', linkedin: '#' },
   ];
 
   const testimonials = [
-    { quote: 'SplitSheet changed how I manage my freelance business. Simple and effective.', name: 'Rachel Thompson', role: 'Copywriter', avatar: 'RT' },
-    { quote: 'Finally, a CRM that doesn\'t require a manual. I was up and running in minutes.', name: 'Mark Lewis', role: 'Web Developer', avatar: 'ML' },
-    { quote: 'The privacy-first approach is exactly what I needed. My client data stays mine.', name: 'Elena Kowalski', role: 'Consultant', avatar: 'EK' },
-    { quote: 'Best investment I\'ve made for my agency. The AI features are game-changing.', name: 'Tom Anderson', role: 'Marketing Agency', avatar: 'TA' },
+    { quote: 'This CRM transformed our agency from chaos to organized growth. We\'re closing 3x more projects now.', name: 'Marcus Rodriguez', role: 'Agency Owner', avatar: 'MR' },
+    { quote: 'Finally, a CRM designed for real estate teams. Our commission tracking alone saved us thousands.', name: 'Jennifer Walsh', role: 'Real Estate Team Lead', avatar: 'JW' },
+    { quote: 'The team collaboration features are incredible. No more lost leads or miscommunication.', name: 'David Park', role: 'Real Estate Broker', avatar: 'DP' },
+    { quote: 'Best investment for our agency. The AI features help us scale without hiring more admin staff.', name: 'Lisa Chen', role: 'Marketing Agency CEO', avatar: 'LC' },
   ];
 
   const values = [
-    { icon: '🎯', title: 'Simplicity First', desc: 'We believe great software should enhance your work, not distract from it. Every feature we build must pass the "would my mom understand this?" test.' },
-    { icon: '🔒', title: 'Privacy Matters', desc: 'Your client relationships are your most valuable asset. We never sell, share, or use your data for anything other than making SplitSheet better for you.' },
-    { icon: '💡', title: 'Quality Over Quantity', desc: 'We\'d rather do a few things exceptionally well than spread ourselves thin. Focus is our competitive advantage.' },
-    { icon: '🤝', title: 'Customer Success', desc: 'We\'re not just building software — we\'re helping freelancers build sustainable businesses. Your success is our success.' },
-    { icon: '⚡', title: 'Speed & Efficiency', desc: 'Freelancers don\'t have time to waste. Every second saved is a second you can spend on what you actually love doing.' },
-    { icon: '🌍', title: 'Accessibility', desc: 'Great tools should be available to everyone, not just enterprises with big budgets. We price accordingly.' },
+    { icon: '�', title: 'Built for Teams', desc: 'We believe great software should scale with your business. Every feature we build must work for agencies and real estate teams, not just solo operators.' },
+    { icon: '🔒', title: 'Privacy First', desc: 'Your client relationships and business data are your most valuable assets. We never sell, share, or use your data for anything other than making our CRM better.' },
+    { icon: '📈', title: 'Growth Focused', desc: 'We\'d rather help you scale your business than add features you don\'t need. Focus on what drives revenue and team productivity.' },
+    { icon: '🤝', title: 'Customer Success', desc: 'We\'re not just building software — we\'re helping agencies and real estate teams build sustainable, profitable businesses. Your success is our success.' },
+    { icon: '⚡', title: 'Efficiency Obsessed', desc: 'Agencies and agents don\'t have time to waste on complex software. Every second saved is a second you can spend serving clients.' },
+    { icon: '🎯', title: 'Industry Expertise', desc: 'Built by people who understand agency life and real estate challenges. No generic solutions — just tools that work for your specific business.' },
   ];
 
   const milestones = [
-    { year: '2024', event: 'Founded', desc: 'SplitSheet was born from a freelancer\'s frustration with complex CRMs' },
-    { year: '2024', event: 'Beta Launch', desc: 'Launched private beta with 500 freelancers, iterated based on feedback' },
-    { year: '2025', event: 'Public Launch', desc: 'Opened to the public with core CRM features and 1,000+ users' },
-    { year: '2025', event: 'AI Features', desc: 'Introduced AI Assistant for AI Pro subscribers, first of many AI features' },
-    { year: '2026', event: '10,000 Users', desc: 'Celebrated 10,000 active users and $50M+ revenue tracked' },
-    { year: '2026', event: 'Mobile App', desc: 'Launching iOS and Android apps for work anywhere' },
+    { year: '2024', event: 'Founded', desc: 'Born from seeing agencies and real estate teams struggle with outdated CRM solutions' },
+    { year: '2024', event: 'Beta Launch', desc: 'Launched private beta with 200 agencies and real estate teams, refined based on real workflow needs' },
+    { year: '2025', event: 'Public Launch', desc: 'Opened to the public with team collaboration and commission tracking features' },
+    { year: '2025', event: 'AI Features', desc: 'Introduced AI Assistant for Agency Pro subscribers, revolutionizing client communication' },
+    { year: '2026', event: '10,000 Users', desc: 'Celebrated 10,000 active agencies and $500M+ deals tracked' },
+    { year: '2026', event: 'Mobile Apps', desc: 'Launching iOS and Android apps for agencies and agents working on the go' },
   ];
 
   const stats = [
-    { value: '10,000+', label: 'Active Users' },
+    { value: '10,000+', label: 'Agencies & Teams' },
     { value: '$50M+', label: 'Revenue Tracked' },
     { value: '150+', label: 'Countries' },
     { value: '4.9/5', label: 'Average Rating' },

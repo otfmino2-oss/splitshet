@@ -35,10 +35,15 @@ export default function PipelinePage() {
   }, [isAuthenticated, isLoading, router]);
 
   useEffect(() => {
-    if (isAuthenticated) setLeads(getAllLeads());
+    if (isAuthenticated) {
+      getAllLeads().then(setLeads);
+    }
   }, [isAuthenticated]);
 
-  const reload = () => setLeads(getAllLeads());
+  const reload = async () => {
+    const leads = await getAllLeads();
+    setLeads(leads);
+  };
 
   const getLeadsByStatus = (status: LeadStatus) => leads.filter(l => l.status === status);
   const getStatusTotal = (status: LeadStatus) => getLeadsByStatus(status).reduce((sum, l) => sum + (l.revenue || 0), 0);

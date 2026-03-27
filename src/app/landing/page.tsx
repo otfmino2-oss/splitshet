@@ -18,17 +18,19 @@ export default function HomePage() {
   useEffect(() => { setIsVisible(true); }, []);
 
   const features = [
-    { icon: '🎯', title: 'Never Lose a Deal Again', desc: 'Smart follow-ups and reminders so you never miss a chance to close' },
-    { icon: '💎', title: 'See Where Your Money Is', desc: 'Visual pipeline that shows exactly which deals are closest to closing' },
-    { icon: '✨', title: 'Know Who Will Close', desc: 'AI-powered insights that predict which leads are most likely to convert' },
-    { icon: '⚡', title: 'Close Faster With AI', desc: 'Auto-generate proposals and follow-ups in seconds, not hours' },
-    { icon: '📈', title: 'Track Every Dollar', desc: 'Know your revenue, expenses, and profit at a glance' },
+    { icon: '�', title: 'Manage Multiple Clients', desc: 'Handle freelance agency clients and real estate deals without confusion' },
+    { icon: '💰', title: 'Track Every Commission', desc: 'Never lose track of payments, commissions, or project milestones' },
+    { icon: '📞', title: 'Smart Follow-ups', desc: 'Automated reminders for client check-ins, property showings, and deal closings' },
+    { icon: '📊', title: 'Pipeline Visibility', desc: 'See all your deals, projects, and opportunities in one visual dashboard' },
+    { icon: '🤖', title: 'AI-Powered Insights', desc: 'Get predictions on which deals will close and which clients need attention' },
+    { icon: '⚡', title: 'Close Deals Faster', desc: 'Generate proposals, contracts, and follow-ups in seconds with AI' },
   ];
 
   const testimonials = [
-    { name: 'Sarah M.', role: 'Brand Designer', quote: 'I doubled my closing rate in 2 months. The follow-up reminders are a game-changer.', avatar: 'SM', rating: 5 },
-    { name: 'James L.', role: 'Marketing Agency', quote: 'Finally, a CRM that doesn\'t feel like homework. We closed 40% more deals last quarter.', avatar: 'JL', rating: 5 },
-    { name: 'Priya K.', role: 'Business Consultant', quote: 'The AI suggestions helped me land 3 huge contracts I would have missed.', avatar: 'PK', rating: 5 },
+    { name: 'Marcus R.', role: 'Freelance Agency Owner', quote: 'We went from 5 to 15 clients in 6 months. The pipeline view helps us prioritize the right projects.', avatar: 'MR', rating: 5 },
+    { name: 'Jennifer T.', role: 'Real Estate Agent', quote: 'I closed 3 properties last month that I would have lost without the automated follow-ups.', avatar: 'JT', rating: 5 },
+    { name: 'David K.', role: 'Digital Marketing Agency', quote: 'Finally, a CRM that understands agency life. We\'re closing 40% more deals since switching.', avatar: 'DK', rating: 5 },
+    { name: 'Sarah L.', role: 'Real Estate Team Lead', quote: 'Managing 20 agents and 50+ listings was chaos. Now everything is organized and profitable.', avatar: 'SL', rating: 5 },
   ];
 
   const howItWorks = [
@@ -39,15 +41,15 @@ export default function HomePage() {
   ];
 
   const faqs = [
-    { q: 'How is SplitSheet different?', a: 'Most CRMs are built for sales teams. SplitSheet is built for freelancers who want to close deals, not manage complex software. And it\'s completely free.' },
-    { q: 'Is it really free?', a: 'Yes! SplitSheet is 100% free to use forever. No credit card required, no hidden fees, no premium version. We believe in helping freelancers succeed.' },
-    { q: 'Will it help me make more money?', a: 'Yes. Our users typically close 30-50% more deals because they never miss a follow-up and always know which leads to prioritize.' },
-    { q: 'Is it hard to set up?', a: 'Not at all. Add your first lead in 30 seconds. No training required.' },
+    { q: 'How is this different from other CRMs?', a: 'Most CRMs are built for enterprise sales teams. This CRM is built for freelance agencies and real estate professionals who need to manage multiple clients, track commissions, and scale their operations without complexity.' },
+    { q: 'Can my team use it together?', a: 'Yes! Share access with your agency team or real estate partners. Everyone sees the same pipeline and can collaborate on deals.' },
+    { q: 'Will it help me scale my agency?', a: 'Absolutely. Our users typically grow their client base by 30-50% because they never miss follow-ups and always know which opportunities to prioritize.' },
+    { q: 'Is it hard to migrate from spreadsheets?', a: 'Not at all. Import your contacts in minutes. No training required - it works the way agencies think.' },
   ];
 
   const stats = [
-    { value: '10,000+', label: 'Freelancers' },
-    { value: '$50M+', label: 'Revenue Tracked' },
+    { value: '10,000+', label: 'Agencies & Agents' },
+    { value: '$500M+', label: 'Deals Tracked' },
     { value: '4.9/5', label: 'Average Rating' },
   ];
 
@@ -75,20 +77,20 @@ export default function HomePage() {
             {/* Trust Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8" style={{ backgroundColor: '#0F0F14', border: '1px solid #1C1C26' }}>
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#10B981' }}></span>
-              <span className="text-sm" style={{ color: '#8B8B9E' }}>Trusted by 10,000+ freelancers</span>
+              <span className="text-sm" style={{ color: '#8B8B9E' }}>Trusted by 10,000+ agencies & real estate professionals</span>
             </div>
 
             {/* Headline */}
             <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight" style={{ color: '#FAFAFA' }}>
-              Close More Clients<br />
+              Scale Your Agency & Close More
               <span style={{ background: `linear-gradient(135deg, ${PRIMARY} 0%, ${PRIMARY_LIGHT} 100%)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                Without Losing Track
-              </span> of Your Leads
+                Real Estate Deals
+              </span>
             </h1>
 
             {/* Subheadline */}
             <p className="text-lg md:text-xl mb-10 max-w-2xl mx-auto" style={{ color: '#A1A1AA' }}>
-              Track leads, follow up at the right time, and turn conversations into paying clients — all in one simple CRM.
+              The CRM built for freelance agencies and real estate teams. Manage clients, track deals, and scale your business without the chaos.
             </p>
 
             {/* CTAs */}
@@ -102,7 +104,7 @@ export default function HomePage() {
                   boxShadow: `0 10px 40px -15px ${PRIMARY}80`
                 }}
               >
-                Start Closing More Deals
+                Start Scaling Your Agency
               </button>
               <button 
                 onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })} 
@@ -141,10 +143,10 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: '#FAFAFA' }}>
-              Built for Freelancers Who
-              <span style={{ background: `linear-gradient(135deg, ${PRIMARY} 0%, ${PRIMARY_LIGHT} 100%)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}> Close Deals</span>
+              Built for Agencies & Real Estate Teams That
+              <span style={{ background: `linear-gradient(135deg, ${PRIMARY} 0%, ${PRIMARY_LIGHT} 100%)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}> Scale & Close</span>
             </h2>
-            <p className="text-lg" style={{ color: '#A1A1AA' }}>Everything you need to turn leads into revenue</p>
+            <p className="text-lg" style={{ color: '#A1A1AA' }}>Everything you need to manage clients, track deals, and grow your business</p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

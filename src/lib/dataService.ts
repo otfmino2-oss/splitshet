@@ -183,27 +183,113 @@ export const getAllLeads = async (): Promise<Lead[]> => {
   }
 };
 
-export const getLeadById = async (id: string): Promise<Lead | undefined> => {
+export const getLeadsFiltered = async (filters: {
+  status?: LeadStatus;
+  priority?: Priority;
+  source?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<Lead[]> => {
+  try {
+    const queryParams = new URLSearchParams();
+    if (filters.status) queryParams.append('status', filters.status);
+    if (filters.priority) queryParams.append('priority', filters.priority);
+    if (filters.source) queryParams.append('source', filters.source);
+    if (filters.limit) queryParams.append('limit', filters.limit.toString());
+    if (filters.offset) queryParams.append('offset', filters.offset.toString());
+
+    const queryString = queryParams.toString();
+    const endpoint = queryString ? `/api/leads?${queryString}` : '/api/leads';
+
+    return await apiRequest(endpoint);
+  } catch (error) {
+    console.error('Failed to fetch filtered leads:', error);
+    // Fallback to local filtering
+    const allLeads = getAllLeadsLocal();
+    return allLeads.filter(lead => {
+      if (filters.status && lead.status !== filters.status) return false;
+      if (filters.priority && lead.priority !== filters.priority) return false;
+      if (filters.source && lead.source !== filters.source) return false;
+      return true;
+    }).slice(filters.offset || 0, (filters.offset || 0) + (filters.limit || allLeads.length));
+  }
+};
+
+export const bulkUpdateLeads = async (updates: { id: string; data: Partial<Lead> }[]): Promise<Lead[]> => {
+  try {
+    const results = await Promise.all(
+      updates.map(({ id, data }) =>
+        apiRequest(`/api/leads/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        })
+      )
+    );
+    return results;
+  } catch (error) {
+    console.error('Failed to bulk update leads:', error);
+    throw new Error('Failed to update multiple leads. Please try again.');
+  }
+};
+
+export const getLeadStats = async (): Promise<{
+  total: number;
+  byStatus: Record<LeadStatus, number>;
+  byPriority: Record<Priority, number>;
+  totalRevenue: number;
+  conversionRate: number;
+}> => {
   try {
     const leads = await getAllLeads();
-    return leads.find(lead => lead.id === id);
+    const stats = {
+      total: leads.length,
+      byStatus: {} as Record<LeadStatus, number>,
+      byPriority: {} as Record<Priority, number>,
+      totalRevenue: 0,
+      conversionRate: 0,
+    };
+
+    // Initialize status counts
+    Object.values(LeadStatus).forEach(status => {
+      stats.byStatus[status] = 0;
+    });
+
+    // Initialize priority counts
+    Object.values(Priority).forEach(priority => {
+      stats.byPriority[priority] = 0;
+    });
+
+    leads.forEach(lead => {
+      stats.byStatus[lead.status]++;
+      stats.byPriority[lead.priority]++;
+      stats.totalRevenue += lead.revenue || 0;
+    });
+
+    const closedWon = stats.byStatus[LeadStatus.CLOSED_WON] || 0;
+    stats.conversionRate = stats.total > 0 ? (closedWon / stats.total) * 100 : 0;
+
+    return stats;
   } catch (error) {
-    console.error('Failed to fetch lead:', error);
-    return undefined;
+    console.error('Failed to get lead stats:', error);
+    throw new Error('Failed to load lead statistics.');
   }
 };
 
 export const createLead = async (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): Promise<Lead> => {
   try {
+    const payload = {
+      ...lead,
+      followUpDate: lead.followUpDate ? lead.followUpDate : undefined,
+    };
+
     const newLead = await apiRequest('/api/leads', {
       method: 'POST',
-      body: JSON.stringify(lead),
+      body: JSON.stringify(payload),
     });
     return newLead;
   } catch (error) {
     console.error('Failed to create lead:', error);
-    // Don't fallback to localStorage - throw error so user knows data wasn't saved
-    throw new Error('Failed to save lead to database. Please check your connection and try again.');
+    throw new Error(error instanceof Error ? error.message : 'Failed to save lead to database. Please check your connection and try again.');
   }
 };
 

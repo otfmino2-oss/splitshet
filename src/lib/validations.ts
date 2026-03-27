@@ -28,13 +28,19 @@ export const passwordResetSchema = z.object({
 });
 
 // Lead Validation
+const dateInputSchema = z.union([
+  z.string().datetime(),
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be yyyy-mm-dd or ISO datetime'),
+]);
+
 export const createLeadSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   contact: z.string().min(1, 'Contact is required').max(255),
   source: z.string().max(100).optional(),
   status: z.string().max(50).optional(),
   priority: z.string().max(50).optional(),
-  followUpDate: z.string().datetime().optional(),
+  followUpDate: z.union([dateInputSchema, z.literal('')]).optional(),
+  lastMessage: z.string().max(5000).optional(),
   notes: z.string().max(5000).optional(),
   revenue: z.number().min(0).default(0),
 });
