@@ -1,13 +1,18 @@
 export interface User {
   id: string;
   email: string;
-  name: string;
+  name: string | null;
   passwordHash: string;
-  plan: SubscriptionPlan;
+  plan: SubscriptionPlan | string;
   subscriptionStatus: 'active' | 'inactive' | 'cancelled';
-  subscriptionEndDate?: string;
+  subscriptionEndDate: string | null;
   createdAt: string;
-  lastLogin?: string;
+  updatedAt: string;
+  lastLogin: string | null;
+  emailVerified: string | null;
+  verificationToken: string | null;
+  passwordResetToken: string | null;
+  passwordResetExpires: string | null;
 }
 
 export interface StoredUser extends Omit<User, 'passwordHash'> {

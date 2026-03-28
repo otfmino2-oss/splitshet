@@ -92,7 +92,6 @@ export default function Dashboard() {
       setLoading(true);
       await createLead({
         ...formData,
-        templatesUsed: [],
         followUpDate: formData.followUpDate?.trim() ?? '',
       });
       invalidateCache('dashboard');

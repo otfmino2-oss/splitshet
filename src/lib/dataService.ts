@@ -150,11 +150,14 @@ const safeStorage = {
   },
 };
 
-const defaultTemplates: Template[] = [
-  { id: 'tpl_1', category: 'Welcome', content: 'Hi {{clientName}}, thanks for reaching out! How can I help you today?', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'tpl_2', category: 'Follow Up', content: 'Hey {{clientName}}, just checking in on our conversation. Do you have any questions?', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'tpl_3', category: 'Proposal', content: 'Hi {{clientName}}, I\'ve attached our proposal for your review. Let me know if you have any questions!', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-];
+const getDefaultTemplates = (): Template[] => {
+  const userId = getCurrentUserId() || 'default';
+  return [
+    { id: 'tpl_1', userId, category: 'Welcome', content: 'Hi {{clientName}}, thanks for reaching out! How can I help you today?', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: 'tpl_2', userId, category: 'Follow Up', content: 'Hey {{clientName}}, just checking in on our conversation. Do you have any questions?', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: 'tpl_3', userId, category: 'Proposal', content: 'Hi {{clientName}}, I\'ve attached our proposal for your review. Let me know if you have any questions!', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+  ];
+};
 
 const initializeUserData = () => {
   const userId = getCurrentUserId();
@@ -164,7 +167,7 @@ const initializeUserData = () => {
   const defaults: Record<string, unknown[]> = {
     leads: [],
     expenses: [],
-    templates: defaultTemplates,
+    templates: getDefaultTemplates(),
     activities: [],
     tasks: [],
   };
@@ -307,7 +310,7 @@ export const getLeadStats = async (): Promise<{
   }
 };
 
-export const createLead = async (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): Promise<Lead> => {
+export const createLead = async (lead: Omit<Lead, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<Lead> => {
   try {
     const payload = {
       ...lead,
@@ -370,11 +373,12 @@ const getAllLeadsLocal = (): Lead[] => {
   }
 };
 
-const createLeadLocal = (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt'>): Lead => {
+const createLeadLocal = (lead: Omit<Lead, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Lead => {
   const leads = getAllLeadsLocal();
   const newLead: Lead = {
     ...lead,
     id: `lead_${Date.now()}`,
+    userId: getCurrentUserId() || '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -521,6 +525,7 @@ const addActivityLocal = (leadId: string, type: ActivityType, description: strin
   const activities = getAllActivitiesLocal();
   const newActivity: Activity = {
     id: `act_${Date.now()}`,
+    userId: getCurrentUserId() || '',
     leadId,
     type,
     description,
@@ -563,11 +568,12 @@ export const getTasksByStatus = (status: TaskStatus): Task[] => {
   return getAllTasks().filter(t => t.status === status);
 };
 
-export const createTask = (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Task => {
+export const createTask = (task: Omit<Task, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Task => {
   const tasks = getAllTasks();
   const newTask: Task = {
     ...task,
     id: `task_${Date.now()}`,
+    userId: getCurrentUserId() || '',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -610,7 +616,7 @@ export const getAllExpenses = async (): Promise<Expense[]> => {
   }
 };
 
-export const createExpense = async (expense: Omit<Expense, 'id' | 'createdAt'>): Promise<Expense> => {
+export const createExpense = async (expense: Omit<Expense, 'id' | 'userId' | 'createdAt'>): Promise<Expense> => {
   try {
     console.log('Creating expense with data:', expense);
     const newExpense = await apiRequest('/api/expenses', {
@@ -679,9 +685,9 @@ const getAllExpensesLocal = (): Expense[] => {
   }
 };
 
-const createExpenseLocal = (expense: Omit<Expense, 'id' | 'createdAt'>): Expense => {
+const createExpenseLocal = (expense: Omit<Expense, 'id' | 'userId' | 'createdAt'>): Expense => {
   const expenses = getAllExpensesLocal();
-  const newExpense: Expense = { ...expense, id: `exp_${Date.now()}`, createdAt: new Date().toISOString() };
+  const newExpense: Expense = { ...expense, id: `exp_${Date.now()}`, userId: getCurrentUserId() || '', createdAt: new Date().toISOString() };
   expenses.push(newExpense);
   safeStorage.setItem(getUserStorageKey('expenses'), JSON.stringify(expenses));
   return newExpense;
@@ -712,9 +718,9 @@ export const getAllTemplates = (): Template[] => {
   try {
     initializeUserData();
     const data = safeStorage.getItem(getUserStorageKey('templates'));
-    return data ? JSON.parse(data) : defaultTemplates;
+    return data ? JSON.parse(data) : getDefaultTemplates();
   } catch {
-    return defaultTemplates;
+    return getDefaultTemplates();
   }
 };
 
@@ -722,9 +728,9 @@ export const getTemplateById = (id: string): Template | undefined => {
   return getAllTemplates().find(t => t.id === id);
 };
 
-export const createTemplate = (template: Omit<Template, 'id' | 'createdAt' | 'updatedAt'>): Template => {
+export const createTemplate = (template: Omit<Template, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Template => {
   const templates = getAllTemplates();
-  const newTemplate: Template = { ...template, id: `tpl_${Date.now()}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const newTemplate: Template = { ...template, id: `tpl_${Date.now()}`, userId: getCurrentUserId() || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
   templates.push(newTemplate);
   safeStorage.setItem(getUserStorageKey('templates'), JSON.stringify(templates));
   return newTemplate;

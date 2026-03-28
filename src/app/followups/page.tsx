@@ -192,7 +192,6 @@ export default function FollowUpsPage() {
         followUpDate: formData.followUpDate || '',
         lastMessage: '',
         notes: '',
-        templatesUsed: [],
         revenue: 0,
       });
       setFormData({ name: '', contact: '', followUpDate: '' });

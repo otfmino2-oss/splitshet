@@ -36,15 +36,15 @@ export enum TaskStatus {
 
 export interface Lead {
   id: string;
+  userId: string;
   name: string;
   contact: string;
   source: string;
-  status: LeadStatus;
-  priority: Priority;
-  followUpDate: string;
-  lastMessage: string;
-  notes: string;
-  templatesUsed: string[];
+  status: LeadStatus | string;
+  priority: Priority | string;
+  followUpDate: string | null;
+  lastMessage: string | null;
+  notes: string | null;
   revenue: number;
   createdAt: string;
   updatedAt: string;
@@ -52,15 +52,17 @@ export interface Lead {
 
 export interface Expense {
   id: string;
-  type: ExpenseType;
+  userId: string;
+  type: ExpenseType | string;
   amount: number;
   date: string;
-  description?: string;
+  description: string | null;
   createdAt: string;
 }
 
 export interface Template {
   id: string;
+  userId: string;
   content: string;
   category: string;
   createdAt: string;
@@ -69,8 +71,9 @@ export interface Template {
 
 export interface Activity {
   id: string;
-  leadId: string;
-  type: ActivityType;
+  userId: string;
+  leadId: string | null;
+  type: ActivityType | string;
   description: string;
   date: string;
   createdAt: string;
@@ -78,12 +81,13 @@ export interface Activity {
 
 export interface Task {
   id: string;
+  userId: string;
   title: string;
-  description: string;
-  status: TaskStatus;
-  priority: Priority;
+  description: string | null;
+  status: TaskStatus | string;
+  priority: Priority | string;
   dueDate: string;
-  leadId?: string;
+  leadId: string | null;
   createdAt: string;
   updatedAt: string;
 }

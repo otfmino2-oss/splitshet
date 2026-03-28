@@ -75,7 +75,7 @@ export default function PipelinePage() {
   const handleAdd = async () => {
     if (!formData.name || !formData.contact) return;
     try {
-      await createLead({ ...formData, templatesUsed: [] });
+      await createLead(formData);
       await reload();
       setFormData({ name: '', contact: '', source: '', status: LeadStatus.NEW, priority: Priority.MEDIUM, followUpDate: '', lastMessage: '', notes: '', revenue: 0 });
       setShowAddModal(false);
