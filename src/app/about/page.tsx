@@ -29,7 +29,7 @@ export default function AboutPage() {
   ];
 
   const values = [
-    { icon: '�', title: 'Built for Teams', desc: 'We believe great software should scale with your business. Every feature we build must work for agencies and real estate teams, not just solo operators.' },
+    { icon: '👥', title: 'Built for Teams', desc: 'We believe great software should scale with your business. Every feature we build must work for agencies and real estate teams, not just solo operators.' },
     { icon: '🔒', title: 'Privacy First', desc: 'Your client relationships and business data are your most valuable assets. We never sell, share, or use your data for anything other than making our CRM better.' },
     { icon: '📈', title: 'Growth Focused', desc: 'We\'d rather help you scale your business than add features you don\'t need. Focus on what drives revenue and team productivity.' },
     { icon: '🤝', title: 'Customer Success', desc: 'We\'re not just building software — we\'re helping agencies and real estate teams build sustainable, profitable businesses. Your success is our success.' },
@@ -197,7 +197,7 @@ export default function AboutPage() {
 
       <footer className="border-t py-8 px-4" style={{ borderColor: '#1C1C26' }}>
         <div className="max-w-4xl mx-auto text-center">
-          <p className="text-sm" style={{ color: '#6B6B7B' }}>© 2026 SplitSheet. Built with for freelancers worldwide.</p>
+          <p className="text-sm" style={{ color: '#6B6B7B' }}>© 2026 SplitSheet. Built with ❤️ for freelancers worldwide.</p>
         </div>
       </footer>
 

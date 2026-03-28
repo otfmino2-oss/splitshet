@@ -18,7 +18,7 @@ export default function HomePage() {
   useEffect(() => { setIsVisible(true); }, []);
 
   const features = [
-    { icon: '�', title: 'Manage Multiple Clients', desc: 'Handle freelance agency clients and real estate deals without confusion' },
+    { icon: '👥', title: 'Manage Multiple Clients', desc: 'Handle freelance agency clients and real estate deals without confusion' },
     { icon: '💰', title: 'Track Every Commission', desc: 'Never lose track of payments, commissions, or project milestones' },
     { icon: '📞', title: 'Smart Follow-ups', desc: 'Automated reminders for client check-ins, property showings, and deal closings' },
     { icon: '📊', title: 'Pipeline Visibility', desc: 'See all your deals, projects, and opportunities in one visual dashboard' },
@@ -81,10 +81,10 @@ export default function HomePage() {
             </div>
 
             {/* Headline */}
-            <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight" style={{ color: '#FAFAFA' }}>
-              Scale Your Agency & Close More
+                        <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight" style={{ color: '#FAFAFA' }}>
+              Scale Your Agency & Close More{' '}
               <span style={{ background: `linear-gradient(135deg, ${PRIMARY} 0%, ${PRIMARY_LIGHT} 100%)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                Real Estate Deals
+Real Estate Deals
               </span>
             </h1>
 
@@ -143,8 +143,8 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4" style={{ color: '#FAFAFA' }}>
-              Built for Agencies & Real Estate Teams That
-              <span style={{ background: `linear-gradient(135deg, ${PRIMARY} 0%, ${PRIMARY_LIGHT} 100%)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}> Scale & Close</span>
+              Built for Agencies & Real Estate Teams That{' '}
+              <span style={{ background: `linear-gradient(135deg, ${PRIMARY} 0%, ${PRIMARY_LIGHT} 100%)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Scale & Close</span>
             </h2>
             <p className="text-lg" style={{ color: '#A1A1AA' }}>Everything you need to manage clients, track deals, and grow your business</p>
           </div>

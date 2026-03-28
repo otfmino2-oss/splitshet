@@ -32,9 +32,7 @@ export default function FollowUpsPage() {
 
   const loadData = useCallback(async () => {
     if (isAuthenticated) {
-      console.log('Loading all leads for follow-ups page...');
       const all = await getAllLeads();
-      console.log('All leads fetched:', all.length, all);
       setAllLeads(all);
       
       const today = new Date().toISOString().split('T')[0];
@@ -47,7 +45,7 @@ export default function FollowUpsPage() {
           : new Date(l.followUpDate).toISOString().split('T')[0];
         return leadDate >= today;
       });
-      console.log('Upcoming leads (with future follow-up dates):', upcoming.length);
+
       upcoming.sort((a, b) => {
         const dateA = typeof a.followUpDate === 'string' 
           ? new Date(a.followUpDate).getTime() 
@@ -64,7 +62,6 @@ export default function FollowUpsPage() {
   // Load data when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      console.log('Follow-ups page mounted and authenticated, loading data...');
       loadData();
     }
   }, [isAuthenticated, loadData]);
@@ -128,9 +125,7 @@ export default function FollowUpsPage() {
 
   const markComplete = async (lead: Lead) => {
     try {
-      console.log('Marking lead complete:', lead.id, 'Current followUpDate:', lead.followUpDate);
       await updateLead(lead.id, { followUpDate: '' });
-      console.log('Lead marked complete successfully');
       await loadData();
     } catch (error) {
       console.error('Failed to mark complete:', error);
@@ -143,9 +138,7 @@ export default function FollowUpsPage() {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toISOString().split('T')[0];
-      console.log('Skipping lead to tomorrow:', lead.id, 'New date:', tomorrowStr);
       await updateLead(lead.id, { followUpDate: tomorrowStr });
-      console.log('Lead skipped to tomorrow successfully');
       await loadData();
     } catch (error) {
       console.error('Failed to skip to tomorrow:', error);
@@ -155,9 +148,7 @@ export default function FollowUpsPage() {
 
   const markAsLost = async (lead: Lead) => {
     try {
-      console.log('Marking lead as lost:', lead.id);
       await updateLead(lead.id, { status: LeadStatus.CLOSED_LOST, followUpDate: '' });
-      console.log('Lead marked as lost successfully');
       await loadData();
     } catch (error) {
       console.error('Failed to mark as lost:', error);
@@ -167,9 +158,7 @@ export default function FollowUpsPage() {
 
   const markAsWon = async (lead: Lead) => {
     try {
-      console.log('Marking lead as won:', lead.id);
       await updateLead(lead.id, { status: LeadStatus.CLOSED_WON, followUpDate: '' });
-      console.log('Lead marked as won successfully');
       await loadData();
     } catch (error) {
       console.error('Failed to mark as won:', error);
@@ -180,9 +169,7 @@ export default function FollowUpsPage() {
   const handleAddFromExisting = async () => {
     if (!selectedLeadId || !formData.followUpDate) return;
     try {
-      console.log('Adding follow-up to existing lead:', selectedLeadId, 'Date:', formData.followUpDate);
       await updateLead(selectedLeadId, { followUpDate: formData.followUpDate });
-      console.log('Follow-up added successfully');
       setSelectedLeadId('');
       setFormData({ name: '', contact: '', followUpDate: '' });
       setShowAddModal(false);
@@ -196,7 +183,6 @@ export default function FollowUpsPage() {
   const handleAddLead = async () => {
     if (!formData.name.trim() || !formData.contact.trim()) return;
     try {
-      console.log('Creating new lead with follow-up:', formData);
       await createLead({
         name: formData.name,
         contact: formData.contact,
@@ -209,7 +195,6 @@ export default function FollowUpsPage() {
         templatesUsed: [],
         revenue: 0,
       });
-      console.log('Lead created with follow-up successfully');
       setFormData({ name: '', contact: '', followUpDate: '' });
       setShowAddModal(false);
       await loadData();
