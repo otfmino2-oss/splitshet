@@ -3,6 +3,8 @@ import OpenAI from 'openai';
 const nvidiaClient = new OpenAI({
   apiKey: process.env.NVIDIA_API_KEY || '',
   baseURL: 'https://integrate.api.nvidia.com/v1',
+  timeout: 30000, // 30 second timeout
+  maxRetries: 2, // Retry failed requests up to 2 times
 });
 
 export interface ComposeOptions {
@@ -66,22 +68,40 @@ REQUIREMENTS:
 Generate the message now.`;
 
   try {
-    const completion = await nvidiaClient.chat.completions.create({
-      model: 'deepseek-ai/deepseek-r1',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-      top_p: 0.8,
-      max_tokens: 500,
-      stream: false,
-    });
+    const completion = await Promise.race([
+      nvidiaClient.chat.completions.create({
+        model: 'deepseek-ai/deepseek-r1',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        top_p: 0.8,
+        max_tokens: 500,
+        stream: false,
+      }),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('AI request timeout')), 30000)
+      ),
+    ]);
 
     const messageObj = completion.choices[0]?.message as { content?: string; reasoning_content?: string } | undefined;
     const reasoning = messageObj?.reasoning_content;
     const message = messageObj?.content || '';
 
+    if (!message) {
+      throw new Error('AI returned empty response');
+    }
+
     return { message: message.trim(), reasoning: reasoning?.trim() };
   } catch (error) {
     console.error('AI Compose Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    if (errorMessage.includes('timeout')) {
+      throw new Error('AI service timed out. Please try again.');
+    }
+    if (errorMessage.includes('rate limit')) {
+      throw new Error('AI service rate limit reached. Please try again in a moment.');
+    }
+    
     throw new Error('Failed to generate message. Please try again.');
   }
 }
@@ -117,29 +137,50 @@ TIME: [best time]
 SUMMARY: [one sentence summary]`;
 
   try {
-    const completion = await nvidiaClient.chat.completions.create({
-      model: 'deepseek-ai/deepseek-r1',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.5,
-      max_tokens: 300,
-      stream: false,
-    });
+    const completion = await Promise.race([
+      nvidiaClient.chat.completions.create({
+        model: 'deepseek-ai/deepseek-r1',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.5,
+        max_tokens: 300,
+        stream: false,
+      }),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('AI request timeout')), 30000)
+      ),
+    ]);
 
     const response = completion.choices[0]?.message?.content || '';
+    
+    if (!response) {
+      throw new Error('AI returned empty response');
+    }
     
     const parseLine = (prefix: string): string => {
       const match = response.match(new RegExp(`${prefix}:\\s*(.+)`));
       return match ? match[1].trim() : '';
     };
 
+    const priority = parseLine('PRIORITY').toLowerCase();
+    const validPriority = ['high', 'medium', 'low'].includes(priority) ? priority as 'high' | 'medium' | 'low' : 'medium';
+
     return {
-      priority: (parseLine('PRIORITY').toLowerCase() as 'high' | 'medium' | 'low') || 'medium',
+      priority: validPriority,
       suggestedAction: parseLine('ACTION') || 'Follow up with the lead',
       nextBestTime: parseLine('TIME') || 'Today',
       summary: parseLine('SUMMARY') || 'Lead needs follow-up',
     };
   } catch (error) {
     console.error('AI Insight Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    if (errorMessage.includes('timeout')) {
+      throw new Error('AI service timed out. Please try again.');
+    }
+    if (errorMessage.includes('rate limit')) {
+      throw new Error('AI service rate limit reached. Please try again in a moment.');
+    }
+    
     throw new Error('Failed to generate insights. Please try again.');
   }
 }
@@ -163,17 +204,38 @@ ${currentTemplate}
 Return only the improved message.`;
 
   try {
-    const completion = await nvidiaClient.chat.completions.create({
-      model: 'deepseek-ai/deepseek-r1',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.7,
-      max_tokens: 500,
-      stream: false,
-    });
+    const completion = await Promise.race([
+      nvidiaClient.chat.completions.create({
+        model: 'deepseek-ai/deepseek-r1',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 500,
+        stream: false,
+      }),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('AI request timeout')), 30000)
+      ),
+    ]);
 
-    return completion.choices[0]?.message?.content?.trim() || currentTemplate;
+    const result = completion.choices[0]?.message?.content?.trim();
+    
+    if (!result) {
+      console.warn('AI returned empty response, returning original template');
+      return currentTemplate;
+    }
+    
+    return result;
   } catch (error) {
     console.error('AI Improve Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    if (errorMessage.includes('timeout')) {
+      throw new Error('AI service timed out. Please try again.');
+    }
+    if (errorMessage.includes('rate limit')) {
+      throw new Error('AI service rate limit reached. Please try again in a moment.');
+    }
+    
     throw new Error('Failed to improve template. Please try again.');
   }
 }

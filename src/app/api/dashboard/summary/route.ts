@@ -3,12 +3,26 @@ import { prisma } from '@/lib/prisma';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { LeadStatus, Priority, ExpenseType } from '@/types';
 import { logError, apiErrorToResponse } from '@/lib/errorHandler';
+import { cache, CacheKeys } from '@/lib/cache';
 
 export async function GET(request: NextRequest) {
   try {
     const user = getAuthUserFromRequest(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Check cache first
+    const cacheKey = CacheKeys.userDashboard(user.userId);
+    const cached = cache.get(cacheKey);
+    
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: {
+          'Cache-Control': 'private, max-age=30',
+          'X-Cache': 'HIT',
+        },
+      });
     }
 
     // Fetch all data in parallel with optimized queries
@@ -116,31 +130,34 @@ export async function GET(request: NextRequest) {
       }))
       .sort((a, b) => b.count - a.count);
 
-    return NextResponse.json(
-      {
-        leads,
-        stats: {
-          total: stats.total,
-          byStatus: stats.byStatus,
-          byPriority: stats.byPriority,
-          totalRevenue: stats.totalRevenue,
-          conversionRate: stats.conversionRate,
-        },
-        todayFollowUps,
-        financial: {
-          totalRevenue: stats.totalRevenue,
-          totalExpenses,
-          profit,
-          roiFromAds,
-        },
-        sourceAnalytics,
+    const responseData = {
+      leads,
+      stats: {
+        total: stats.total,
+        byStatus: stats.byStatus,
+        byPriority: stats.byPriority,
+        totalRevenue: stats.totalRevenue,
+        conversionRate: stats.conversionRate,
       },
-      {
-        headers: {
-          'Cache-Control': 'private, max-age=30',
-        },
-      }
-    );
+      todayFollowUps,
+      financial: {
+        totalRevenue: stats.totalRevenue,
+        totalExpenses,
+        profit,
+        roiFromAds,
+      },
+      sourceAnalytics,
+    };
+
+    // Cache for 30 seconds
+    cache.set(cacheKey, responseData, 30);
+
+    return NextResponse.json(responseData, {
+      headers: {
+        'Cache-Control': 'private, max-age=30',
+        'X-Cache': 'MISS',
+      },
+    });
   } catch (error) {
     logError('dashboard_summary', error);
     return apiErrorToResponse(error);

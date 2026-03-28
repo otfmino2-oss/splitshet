@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-interface RateLimitStore {
-  [key: string]: {
-    count: number;
-    resetTime: number;
-  };
+interface RateLimitEntry {
+  count: number;
+  resetTime: number;
 }
 
-const rateLimitStore: RateLimitStore = {};
+const rateLimitStore = new Map<string, RateLimitEntry>();
 let cleanupTimer: NodeJS.Timeout | null = null;
+const MAX_STORE_SIZE = 10000; // Prevent unlimited memory growth
 
 /**
  * Clean up expired rate limit entries to prevent memory leak
@@ -17,16 +16,28 @@ function cleanupExpiredEntries(): void {
   const now = Date.now();
   let cleaned = 0;
 
-  for (const key in rateLimitStore) {
-    if (rateLimitStore[key].resetTime < now) {
-      delete rateLimitStore[key];
+  for (const [key, entry] of rateLimitStore.entries()) {
+    if (entry.resetTime < now) {
+      rateLimitStore.delete(key);
       cleaned++;
     }
   }
 
-  // Clean up every hour
-  if (cleaned > 0) {
-    console.log(`Rate limit cleanup: removed ${cleaned} expired entries`);
+  // If still too large, remove oldest entries (LRU-like behavior)
+  if (rateLimitStore.size > MAX_STORE_SIZE) {
+    const sortedEntries = Array.from(rateLimitStore.entries())
+      .sort((a, b) => a[1].resetTime - b[1].resetTime);
+    
+    const toRemove = rateLimitStore.size - MAX_STORE_SIZE;
+    for (let i = 0; i < toRemove; i++) {
+      rateLimitStore.delete(sortedEntries[i][0]);
+      cleaned++;
+    }
+  }
+
+  // Log cleanup stats
+  if (cleaned > 0 && process.env.NODE_ENV === 'development') {
+    console.log(`[Rate Limit] Cleaned up ${cleaned} entries. Current size: ${rateLimitStore.size}`);
   }
 }
 
@@ -42,7 +53,7 @@ function ensureCleanupScheduled(): void {
 
 /**
  * Simple rate limiter for API routes
- * Uses in-memory store (for production, use Redis)
+ * Uses in-memory Map (for production, use Redis or Vercel KV)
  */
 export function createRateLimiter(
   windowMs: number = 15 * 60 * 1000, // 15 minutes
@@ -53,15 +64,15 @@ export function createRateLimiter(
   return function rateLimit(key: string): boolean {
     const now = Date.now();
 
-    if (!rateLimitStore[key]) {
-      rateLimitStore[key] = {
+    const record = rateLimitStore.get(key);
+
+    if (!record) {
+      rateLimitStore.set(key, {
         count: 1,
         resetTime: now + windowMs,
-      };
+      });
       return true;
     }
-
-    const record = rateLimitStore[key];
 
     // Reset if window has passed
     if (now > record.resetTime) {
@@ -109,6 +120,41 @@ export const apiRateLimiter = createRateLimiter(15 * 60 * 1000, 100); // 100 req
 export function rateLimitResponse(): NextResponse {
   return NextResponse.json(
     { error: 'Too many requests. Please try again later.' },
-    { status: 429, headers: { 'Retry-After': '900' } }
+    { 
+      status: 429, 
+      headers: { 
+        'Retry-After': '900',
+        'X-RateLimit-Limit': '100',
+        'X-RateLimit-Remaining': '0',
+      } 
+    }
   );
+}
+
+/**
+ * Get rate limit stats for a key
+ */
+export function getRateLimitStats(key: string): { count: number; remaining: number; resetTime: number } | null {
+  const record = rateLimitStore.get(key);
+  if (!record) return null;
+  
+  return {
+    count: record.count,
+    remaining: Math.max(0, 100 - record.count),
+    resetTime: record.resetTime,
+  };
+}
+
+/**
+ * Clear rate limit for a specific key (useful for testing or admin override)
+ */
+export function clearRateLimit(key: string): boolean {
+  return rateLimitStore.delete(key);
+}
+
+/**
+ * Get current store size (for monitoring)
+ */
+export function getRateLimitStoreSize(): number {
+  return rateLimitStore.size;
 }

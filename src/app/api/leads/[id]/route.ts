@@ -4,6 +4,7 @@ import { updateLeadSchema } from '@/lib/validations';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { parseRequestBody, apiErrorToResponse, logError, ApiError } from '@/lib/errorHandler';
 import { sanitizeString } from '@/lib/paramParsing';
+import { invalidateUserCache } from '@/lib/cache';
 
 export async function GET(
   request: NextRequest,
@@ -123,6 +124,9 @@ export async function PUT(
       },
     });
 
+    // Invalidate user cache after updating lead
+    invalidateUserCache(user.userId);
+
     return NextResponse.json(updatedLead);
   } catch (error) {
     logError('update_lead', error);
@@ -153,6 +157,9 @@ export async function DELETE(
     if (lead.count === 0) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
+
+    // Invalidate user cache after deleting lead
+    invalidateUserCache(user.userId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

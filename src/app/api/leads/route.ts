@@ -4,6 +4,7 @@ import { createLeadSchema } from '@/lib/validations';
 import { getAuthUserFromRequest } from '@/lib/auth';
 import { parseRequestBody, apiErrorToResponse, logError, ApiError } from '@/lib/errorHandler';
 import { parseIntSafe, sanitizeString } from '@/lib/paramParsing';
+import { invalidateUserCache } from '@/lib/cache';
 
 export async function POST(request: NextRequest) {
   try {
@@ -59,6 +60,9 @@ export async function POST(request: NextRequest) {
         revenue: leadData.revenue || 0,
       },
     });
+
+    // Invalidate user cache after creating lead
+    invalidateUserCache(user.userId);
 
     return NextResponse.json(lead, { status: 201 });
   } catch (error) {
